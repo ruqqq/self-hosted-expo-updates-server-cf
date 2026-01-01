@@ -8,6 +8,8 @@
     "deploy": "wrangler deploy",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env production",
+    "build:web": "bash ../scripts/build-web.sh",
+    "setup": "bash ../scripts/setup.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply expo-updates",
     "db:migrate:local": "wrangler d1 migrations apply expo-updates --local",

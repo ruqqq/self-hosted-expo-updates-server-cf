@@ -6,6 +6,16 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 # ============================================================================
+# STATIC ASSETS (Web Dashboard)
+# ============================================================================
+# The Web dashboard is built and served as static assets
+# Build with: npm run build:web (from root directory)
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# ============================================================================
 # BINDINGS
 # ============================================================================
 
@@ -39,12 +49,6 @@ PUBLIC_URL = "https://expo-updates.your-domain.workers.dev"
 [dev]
 port = 3000
 local_protocol = "http"
-
-# Local D1 persistence
-[[d1_databases]]
-binding = "DB"
-database_name = "expo-updates"
-database_id = "local"
 
 # ============================================================================
 # PRODUCTION ENVIRONMENT

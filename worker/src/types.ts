@@ -9,6 +9,9 @@ export interface Env {
   // R2 Bucket for update files
   R2: R2Bucket
 
+  // Static assets (Web Dashboard)
+  ASSETS: Fetcher
+
   // Environment variables
   JWT_SECRET: string
   UPLOAD_KEY: string

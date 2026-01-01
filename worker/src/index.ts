@@ -70,8 +70,16 @@ app.use(
 // Request logging (development)
 app.use("*", logger())
 
-// Pretty JSON responses
-app.use("*", prettyJSON())
+// Pretty JSON responses for API routes
+app.use("/api/*", prettyJSON())
+app.use("/status", prettyJSON())
+app.use("/authentication", prettyJSON())
+app.use("/apps/*", prettyJSON())
+app.use("/uploads/*", prettyJSON())
+app.use("/upload", prettyJSON())
+app.use("/clients/*", prettyJSON())
+app.use("/stats/*", prettyJSON())
+app.use("/utils/*", prettyJSON())
 
 // ============================================================================
 // PUBLIC ROUTES (No Authentication)
@@ -107,6 +115,99 @@ app.route("/utils", utilsRoutes)
 app.route("/upload", uploadsRoutes)
 
 // ============================================================================
+// DYNAMIC ENV-CONFIG.JS FOR WEB DASHBOARD
+// ============================================================================
+
+app.get("/env-config.js", (c) => {
+  const config = {
+    API_BASE_URL: c.env.PUBLIC_URL || "",
+    ENVIRONMENT: "production",
+  }
+
+  return new Response(`window._env_ = ${JSON.stringify(config, null, 2)};`, {
+    headers: {
+      "Content-Type": "application/javascript",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+    },
+  })
+})
+
+// ============================================================================
+// STATIC ASSETS (Web Dashboard)
+// ============================================================================
+
+// Serve static assets for paths that don't match API routes
+app.get("*", async (c) => {
+  const url = new URL(c.req.url)
+  const pathname = url.pathname
+
+  // Skip API paths (already handled above)
+  if (
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/status") ||
+    pathname.startsWith("/authentication") ||
+    pathname.startsWith("/apps") ||
+    pathname.startsWith("/uploads") ||
+    pathname.startsWith("/upload") ||
+    pathname.startsWith("/clients") ||
+    pathname.startsWith("/stats") ||
+    pathname.startsWith("/utils")
+  ) {
+    return c.json({ error: "Not Found" }, 404)
+  }
+
+  // Check if ASSETS binding exists
+  if (!c.env.ASSETS) {
+    return c.json(
+      { error: "Static assets not configured. Run: npm run build:web" },
+      500,
+    )
+  }
+
+  try {
+    // Try to serve the requested file
+    let response = await c.env.ASSETS.fetch(c.req.raw)
+
+    // If not found or is HTML (SPA routing), serve index.html
+    if (response.status === 404 || !pathname.includes(".")) {
+      const indexRequest = new Request(
+        new URL("/index.html", c.req.url).toString(),
+        c.req.raw,
+      )
+      response = await c.env.ASSETS.fetch(indexRequest)
+    }
+
+    // Add cache headers for static assets
+    if (response.ok && pathname.includes(".")) {
+      const headers = new Headers(response.headers)
+      // Cache assets with hashes for 1 year
+      if (pathname.includes("/assets/")) {
+        headers.set("Cache-Control", "public, max-age=31536000, immutable")
+      } else {
+        headers.set("Cache-Control", "no-cache")
+      }
+      return new Response(response.body, {
+        status: response.status,
+        headers,
+      })
+    }
+
+    return response
+  } catch {
+    // Fallback: serve index.html for SPA routing
+    try {
+      const indexRequest = new Request(
+        new URL("/index.html", c.req.url).toString(),
+        c.req.raw,
+      )
+      return await c.env.ASSETS.fetch(indexRequest)
+    } catch {
+      return c.json({ error: "Static assets not found" }, 404)
+    }
+  }
+})
+
+// ============================================================================
 // ERROR HANDLING
 // ============================================================================
 
@@ -128,10 +229,6 @@ app.onError((err, c) => {
     },
     500,
   )
-})
-
-app.notFound((c) => {
-  return c.json({ error: "Not Found" }, 404)
 })
 
 // ============================================================================
