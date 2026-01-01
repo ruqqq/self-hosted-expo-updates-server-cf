@@ -32,3 +32,8 @@ npm-debug.*
 
 # IDE - WebStorm
 .idea/*
+
+# Cloudflare Worker
+/worker/public/
+/worker/.wrangler/
+/worker/.dev.vars
