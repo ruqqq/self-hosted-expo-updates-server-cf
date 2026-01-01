@@ -1,0 +1,38 @@
+{
+  "name": "expo-updates-worker",
+  "version": "2.0.0",
+  "description": "Self-Hosted Expo Updates Server - Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply expo-updates",
+    "db:migrate:local": "wrangler d1 migrations apply expo-updates --local",
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "drizzle-orm": "^0.29.0",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/bcryptjs": "^2.4.6",
+    "drizzle-kit": "^0.20.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^3.22.0",
+    "vitest": "^1.2.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

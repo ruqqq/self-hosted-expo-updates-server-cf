@@ -1,0 +1,68 @@
+# Cloudflare Worker Configuration
+# Self-Hosted Expo Updates Server
+
+name = "expo-updates-server"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# ============================================================================
+# BINDINGS
+# ============================================================================
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "expo-updates"
+database_id = "YOUR_DATABASE_ID"  # Replace with actual D1 database ID
+
+# R2 Bucket for update files
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "expo-updates"
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+
+[vars]
+PUBLIC_URL = "https://expo-updates.your-domain.workers.dev"
+
+# Secrets (set via wrangler secret put)
+# - JWT_SECRET: Secret for signing JWT tokens
+# - UPLOAD_KEY: Key for authenticating publish script uploads
+# - ADMIN_PASSWORD: Initial admin password
+
+# ============================================================================
+# DEVELOPMENT
+# ============================================================================
+
+[dev]
+port = 3000
+local_protocol = "http"
+
+# Local D1 persistence
+[[d1_databases]]
+binding = "DB"
+database_name = "expo-updates"
+database_id = "local"
+
+# ============================================================================
+# PRODUCTION ENVIRONMENT
+# ============================================================================
+
+[env.production]
+name = "expo-updates-server"
+route = { pattern = "updates.your-domain.com/*", zone_name = "your-domain.com" }
+
+[env.production.vars]
+PUBLIC_URL = "https://updates.your-domain.com"
+
+# ============================================================================
+# STAGING ENVIRONMENT
+# ============================================================================
+
+[env.staging]
+name = "expo-updates-server-staging"
+
+[env.staging.vars]
+PUBLIC_URL = "https://expo-updates-staging.your-domain.workers.dev"
