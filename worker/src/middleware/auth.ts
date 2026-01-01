@@ -4,9 +4,9 @@
  * JWT verification middleware for protected routes.
  */
 
-import { Context, Next } from 'hono'
-import { jwt } from 'hono/jwt'
-import type { Env } from '../types'
+import { Context, Next } from "hono"
+import { jwt } from "hono/jwt"
+import type { Env } from "../types"
 
 /**
  * JWT authentication middleware.
@@ -23,11 +23,14 @@ export function authMiddleware() {
  * Upload key authentication middleware.
  * Used for the /upload endpoint (publish script).
  */
-export async function uploadKeyMiddleware(c: Context<{ Bindings: Env }>, next: Next) {
-  const uploadKey = c.req.header('upload-key')
+export async function uploadKeyMiddleware(
+  c: Context<{ Bindings: Env }>,
+  next: Next,
+) {
+  const uploadKey = c.req.header("upload-key")
 
   if (!uploadKey || uploadKey !== c.env.UPLOAD_KEY) {
-    return c.json({ error: 'Invalid upload key' }, 401)
+    return c.json({ error: "Invalid upload key" }, 401)
   }
 
   await next()
@@ -38,10 +41,10 @@ export async function uploadKeyMiddleware(c: Context<{ Bindings: Env }>, next: N
  * Must be used after authMiddleware.
  */
 export async function adminOnly(c: Context<{ Bindings: Env }>, next: Next) {
-  const payload = c.get('jwtPayload')
+  const payload = c.get("jwtPayload")
 
-  if (!payload || payload.role !== 'admin') {
-    return c.json({ error: 'Admin access required' }, 403)
+  if (!payload || payload.role !== "admin") {
+    return c.json({ error: "Admin access required" }, 403)
   }
 
   await next()

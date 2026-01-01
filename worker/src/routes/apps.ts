@@ -5,18 +5,18 @@
  * All routes require JWT authentication.
  */
 
-import { Hono } from 'hono'
-import { jwt } from 'hono/jwt'
-import { drizzle } from 'drizzle-orm/d1'
-import { eq } from 'drizzle-orm'
+import { Hono } from "hono"
+import { jwt } from "hono/jwt"
+import { drizzle } from "drizzle-orm/d1"
+import { eq } from "drizzle-orm"
 
-import type { Env } from '../types'
-import { apps, type NewApp } from '../db/schema'
+import type { Env } from "../types"
+import { apps, type NewApp } from "../db/schema"
 
 const appsRouter = new Hono<{ Bindings: Env }>()
 
 // Apply JWT middleware to all routes
-appsRouter.use('*', (c, next) => {
+appsRouter.use("*", (c, next) => {
   const jwtMiddleware = jwt({ secret: c.env.JWT_SECRET })
   return jwtMiddleware(c, next)
 })
@@ -25,38 +25,36 @@ appsRouter.use('*', (c, next) => {
  * GET /apps
  * List all applications.
  */
-appsRouter.get('/', async (c) => {
+appsRouter.get("/", async (c) => {
   const db = drizzle(c.env.DB)
   const allApps = await db.select().from(apps)
 
   // Don't expose private keys in list
-  return c.json(allApps.map(app => ({
-    ...app,
-    privateKey: app.privateKey ? '[REDACTED]' : null,
-  })))
+  return c.json(
+    allApps.map((app) => ({
+      ...app,
+      privateKey: app.privateKey ? "[REDACTED]" : null,
+    })),
+  )
 })
 
 /**
  * GET /apps/:id
  * Get a single application by ID (slug).
  */
-appsRouter.get('/:id', async (c) => {
-  const id = c.req.param('id')
+appsRouter.get("/:id", async (c) => {
+  const id = c.req.param("id")
   const db = drizzle(c.env.DB)
 
-  const [app] = await db
-    .select()
-    .from(apps)
-    .where(eq(apps.id, id))
-    .limit(1)
+  const [app] = await db.select().from(apps).where(eq(apps.id, id)).limit(1)
 
   if (!app) {
-    return c.json({ error: 'App not found' }, 404)
+    return c.json({ error: "App not found" }, 404)
   }
 
   return c.json({
     ...app,
-    privateKey: app.privateKey ? '[REDACTED]' : null,
+    privateKey: app.privateKey ? "[REDACTED]" : null,
     hasPrivateKey: !!app.privateKey,
   })
 })
@@ -65,12 +63,12 @@ appsRouter.get('/:id', async (c) => {
  * POST /apps
  * Create a new application.
  */
-appsRouter.post('/', async (c) => {
+appsRouter.post("/", async (c) => {
   const body = await c.req.json<NewApp>()
   const db = drizzle(c.env.DB)
 
   if (!body.id) {
-    return c.json({ error: 'App ID (slug) is required' }, 400)
+    return c.json({ error: "App ID (slug) is required" }, 400)
   }
 
   // Check if app already exists
@@ -81,7 +79,7 @@ appsRouter.post('/', async (c) => {
     .limit(1)
 
   if (existing) {
-    return c.json({ error: 'App already exists' }, 409)
+    return c.json({ error: "App already exists" }, 409)
   }
 
   const newApp: NewApp = {
@@ -102,8 +100,8 @@ appsRouter.post('/', async (c) => {
  * PATCH /apps/:id
  * Update an application.
  */
-appsRouter.patch('/:id', async (c) => {
-  const id = c.req.param('id')
+appsRouter.patch("/:id", async (c) => {
+  const id = c.req.param("id")
   const body = await c.req.json<Partial<NewApp>>()
   const db = drizzle(c.env.DB)
 
@@ -114,7 +112,7 @@ appsRouter.patch('/:id', async (c) => {
     .limit(1)
 
   if (!existing) {
-    return c.json({ error: 'App not found' }, 404)
+    return c.json({ error: "App not found" }, 404)
   }
 
   await db
@@ -132,8 +130,8 @@ appsRouter.patch('/:id', async (c) => {
  * DELETE /apps/:id
  * Delete an application and all its uploads.
  */
-appsRouter.delete('/:id', async (c) => {
-  const id = c.req.param('id')
+appsRouter.delete("/:id", async (c) => {
+  const id = c.req.param("id")
   const db = drizzle(c.env.DB)
 
   // TODO: Also delete uploads from R2

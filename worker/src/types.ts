@@ -17,12 +17,12 @@ export interface Env {
 }
 
 // Extend Hono context with our bindings
-declare module 'hono' {
+declare module "hono" {
   interface ContextVariableMap {
     user: {
       id: string
       username: string
-      role: 'admin' | 'user'
+      role: "admin" | "user"
     }
   }
 }
@@ -30,7 +30,7 @@ declare module 'hono' {
 // Request context after parsing Expo headers
 export interface ExpoRequestContext {
   project: string
-  platform: 'ios' | 'android'
+  platform: "ios" | "android"
   runtimeVersion: string
   releaseChannel: string
   protocolVersion: string

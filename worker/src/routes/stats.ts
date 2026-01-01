@@ -4,18 +4,18 @@
  * Aggregated statistics for the dashboard.
  */
 
-import { Hono } from 'hono'
-import { jwt } from 'hono/jwt'
-import { drizzle } from 'drizzle-orm/d1'
-import { eq, sql, count } from 'drizzle-orm'
+import { Hono } from "hono"
+import { jwt } from "hono/jwt"
+import { drizzle } from "drizzle-orm/d1"
+import { eq, sql, count } from "drizzle-orm"
 
-import type { Env } from '../types'
-import { clients, uploads } from '../db/schema'
+import type { Env } from "../types"
+import { clients, uploads } from "../db/schema"
 
 const statsRouter = new Hono<{ Bindings: Env }>()
 
 // Apply JWT middleware to all routes
-statsRouter.use('*', (c, next) => {
+statsRouter.use("*", (c, next) => {
   const jwtMiddleware = jwt({ secret: c.env.JWT_SECRET })
   return jwtMiddleware(c, next)
 })
@@ -24,8 +24,8 @@ statsRouter.use('*', (c, next) => {
  * GET /stats/:project
  * Get statistics for a specific project.
  */
-statsRouter.get('/:project', async (c) => {
-  const project = c.req.param('project')
+statsRouter.get("/:project", async (c) => {
+  const project = c.req.param("project")
   const db = drizzle(c.env.DB)
 
   // Get client counts by platform
@@ -69,26 +69,37 @@ statsRouter.get('/:project', async (c) => {
   const [activeClients] = await db
     .select({ count: count() })
     .from(clients)
-    .where(sql`${clients.project} = ${project} AND ${clients.lastSeen} > ${oneDayAgo.getTime()}`)
+    .where(
+      sql`${clients.project} = ${project} AND ${clients.lastSeen} > ${oneDayAgo.getTime()}`,
+    )
 
   return c.json({
     project,
     clients: {
       total: totalClients?.count || 0,
       active24h: activeClients?.count || 0,
-      byPlatform: platformStats.reduce((acc, { platform, count }) => {
-        acc[platform || 'unknown'] = count
-        return acc
-      }, {} as Record<string, number>),
-      byVersion: versionStats.reduce((acc, { version, count }) => {
-        acc[version || 'unknown'] = count
-        return acc
-      }, {} as Record<string, number>),
+      byPlatform: platformStats.reduce(
+        (acc, { platform, count }) => {
+          acc[platform || "unknown"] = count
+          return acc
+        },
+        {} as Record<string, number>,
+      ),
+      byVersion: versionStats.reduce(
+        (acc, { version, count }) => {
+          acc[version || "unknown"] = count
+          return acc
+        },
+        {} as Record<string, number>,
+      ),
     },
-    uploads: uploadStats.reduce((acc, { status, count }) => {
-      acc[status || 'unknown'] = count
-      return acc
-    }, {} as Record<string, number>),
+    uploads: uploadStats.reduce(
+      (acc, { status, count }) => {
+        acc[status || "unknown"] = count
+        return acc
+      },
+      {} as Record<string, number>,
+    ),
   })
 })
 
