@@ -19,7 +19,7 @@ binding = "R2"
 bucket_name = "expo-updates"
 
 [vars]
-PUBLIC_URL = "https://expo-updates.ruqqq.workers.dev"
+PUBLIC_URL = "https://expo-updates-server.ruqqq.workers.dev"
 
 [dev]
 port = 3000

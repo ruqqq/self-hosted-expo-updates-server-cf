@@ -29,21 +29,19 @@ interface UploadedFile {
 const uploadsRouter = new Hono<{ Bindings: Env }>()
 
 // ============================================================================
-// PROTECTED ROUTES (JWT)
+// JWT Middleware helper
 // ============================================================================
 
-// Apply JWT to list/update/delete operations
-const protectedRoutes = new Hono<{ Bindings: Env }>()
-protectedRoutes.use("*", (c, next) => {
+const jwtMiddlewareHandler = (c: any, next: any) => {
   const jwtMiddleware = jwt({ secret: c.env.JWT_SECRET })
   return jwtMiddleware(c, next)
-})
+}
 
 /**
  * GET /uploads
  * List uploads, optionally filtered by project/version/channel.
  */
-protectedRoutes.get("/", async (c) => {
+uploadsRouter.get("/", jwtMiddlewareHandler, async (c) => {
   const db = drizzle(c.env.DB)
   const project = c.req.query("project")
   const version = c.req.query("version")
@@ -69,7 +67,7 @@ protectedRoutes.get("/", async (c) => {
  * GET /uploads/:id
  * Get single upload by ID.
  */
-protectedRoutes.get("/:id", async (c) => {
+uploadsRouter.get("/:id", jwtMiddlewareHandler, async (c) => {
   const id = c.req.param("id")
   const db = drizzle(c.env.DB)
 
@@ -90,7 +88,7 @@ protectedRoutes.get("/:id", async (c) => {
  * PATCH /uploads/:id
  * Update upload (mainly for status changes like release/rollback).
  */
-protectedRoutes.patch("/:id", async (c) => {
+uploadsRouter.patch("/:id", jwtMiddlewareHandler, async (c) => {
   const id = c.req.param("id")
   const body = await c.req.json<Partial<NewUpload>>()
   const db = drizzle(c.env.DB)
@@ -124,7 +122,7 @@ protectedRoutes.patch("/:id", async (c) => {
  * DELETE /uploads/:id
  * Delete upload and its R2 files.
  */
-protectedRoutes.delete("/:id", async (c) => {
+uploadsRouter.delete("/:id", jwtMiddlewareHandler, async (c) => {
   const id = c.req.param("id")
   const db = drizzle(c.env.DB)
 
@@ -153,9 +151,6 @@ protectedRoutes.delete("/:id", async (c) => {
 
   return c.json({ success: true })
 })
-
-// Mount protected routes
-uploadsRouter.route("/", protectedRoutes)
 
 // ============================================================================
 // UPLOAD ENDPOINT (upload-key)

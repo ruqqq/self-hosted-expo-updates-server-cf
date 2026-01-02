@@ -20,7 +20,10 @@
     "format": "oxfmt --write src/",
     "format:check": "oxfmt --check src/",
     "check": "npm run typecheck && npm run lint && npm run format:check",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "./scripts/e2e-test.sh",
+    "test:e2e:local": "BASE_URL=http://localhost:3000 ./scripts/e2e-test.sh",
+    "test:e2e:deployed": "./scripts/e2e-test.sh"
   },
   "dependencies": {
     "hono": "^4.0.0",

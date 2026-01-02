@@ -19,6 +19,8 @@ const auth = new Hono<{ Bindings: Env }>()
 /**
  * POST /authentication
  * Login with username and password, returns JWT token.
+ *
+ * On first run (no users exist), creates admin user with ADMIN_PASSWORD.
  */
 auth.post("/", async (c) => {
   const { username, password } = await c.req.json<{
@@ -31,6 +33,20 @@ auth.post("/", async (c) => {
   }
 
   const db = drizzle(c.env.DB)
+
+  // Check if any users exist - if not, create admin user
+  const allUsers = await db.select().from(users).limit(1)
+  if (allUsers.length === 0 && c.env.ADMIN_PASSWORD) {
+    const hashedPassword = await bcrypt.hash(c.env.ADMIN_PASSWORD, 10)
+    await db.insert(users).values({
+      id: crypto.randomUUID(),
+      username: "admin",
+      password: hashedPassword,
+      role: "admin",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+  }
 
   // Find user by username
   const [user] = await db
