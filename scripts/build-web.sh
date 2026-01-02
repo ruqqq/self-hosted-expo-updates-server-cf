@@ -26,13 +26,13 @@ fi
 if [ ! -d "$WEB_DIR/node_modules" ]; then
   echo "📦 Installing Web dependencies..."
   cd "$WEB_DIR"
-  npm install
+  yarn install
 fi
 
 # Build the web app
 echo "🏗️  Building production bundle..."
 cd "$WEB_DIR"
-npm run build 2>/dev/null || npx vite build
+yarn run build 2>/dev/null || npx vite build
 
 # Check if build was successful
 if [ ! -d "$WEB_DIR/dist" ]; then

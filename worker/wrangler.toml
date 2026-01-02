@@ -5,68 +5,21 @@ name = "expo-updates-server"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# ============================================================================
-# STATIC ASSETS (Web Dashboard)
-# ============================================================================
-# The Web dashboard is built and served as static assets
-# Build with: npm run build:web (from root directory)
-
 [assets]
 directory = "./public"
 binding = "ASSETS"
 
-# ============================================================================
-# BINDINGS
-# ============================================================================
-
-# D1 Database
 [[d1_databases]]
 binding = "DB"
 database_name = "expo-updates"
-database_id = "YOUR_DATABASE_ID"  # Replace with actual D1 database ID
+database_id = "22fc361c-d8d8-4b9b-be2c-da2cfa2747c8"
 
-# R2 Bucket for update files
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "expo-updates"
 
-# ============================================================================
-# ENVIRONMENT VARIABLES
-# ============================================================================
-
 [vars]
-PUBLIC_URL = "https://expo-updates.your-domain.workers.dev"
-
-# Secrets (set via wrangler secret put)
-# - JWT_SECRET: Secret for signing JWT tokens
-# - UPLOAD_KEY: Key for authenticating publish script uploads
-# - ADMIN_PASSWORD: Initial admin password
-
-# ============================================================================
-# DEVELOPMENT
-# ============================================================================
+PUBLIC_URL = "https://expo-updates.ruqqq.workers.dev"
 
 [dev]
 port = 3000
-local_protocol = "http"
-
-# ============================================================================
-# PRODUCTION ENVIRONMENT
-# ============================================================================
-
-[env.production]
-name = "expo-updates-server"
-route = { pattern = "updates.your-domain.com/*", zone_name = "your-domain.com" }
-
-[env.production.vars]
-PUBLIC_URL = "https://updates.your-domain.com"
-
-# ============================================================================
-# STAGING ENVIRONMENT
-# ============================================================================
-
-[env.staging]
-name = "expo-updates-server-staging"
-
-[env.staging.vars]
-PUBLIC_URL = "https://expo-updates-staging.your-domain.workers.dev"
