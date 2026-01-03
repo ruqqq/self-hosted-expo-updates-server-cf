@@ -123,12 +123,22 @@ npx expo export --output-dir "$BUILDFOLDER"
 # Copy app.json for metadata
 cp app.json "$BUILDFOLDER/"
 
-# Get git info if available
-GIT_BRANCH=""
-GIT_COMMIT=""
-if [ -d ".git" ]; then
-  GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-  GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+# Get version control info (supports both jj and git)
+VCS_BRANCH=""
+VCS_COMMIT=""
+
+if [ -d ".jj" ]; then
+  # Jujutsu (jj) repository
+  VCS_BRANCH=$(jj log -r @ --no-graph -T 'bookmarks' 2>/dev/null | head -1 || echo "")
+  VCS_COMMIT=$(jj log -r @ --no-graph -T 'commit_id.short()' 2>/dev/null || echo "")
+  # If no bookmark, try to get description as context
+  if [ -z "$VCS_BRANCH" ]; then
+    VCS_BRANCH=$(jj log -r @ --no-graph -T 'description.first_line()' 2>/dev/null | head -c 50 || echo "")
+  fi
+elif [ -d ".git" ]; then
+  # Git repository
+  VCS_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  VCS_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "")
 fi
 
 # Build curl arguments
@@ -143,12 +153,12 @@ CURL_ARGS=(
   -H "release-channel: $RELEASECHANNEL"
 )
 
-if [ -n "$GIT_BRANCH" ]; then
-  CURL_ARGS+=(-H "git-branch: $GIT_BRANCH")
+if [ -n "$VCS_BRANCH" ]; then
+  CURL_ARGS+=(-H "git-branch: $VCS_BRANCH")
 fi
 
-if [ -n "$GIT_COMMIT" ]; then
-  CURL_ARGS+=(-H "git-commit: $GIT_COMMIT")
+if [ -n "$VCS_COMMIT" ]; then
+  CURL_ARGS+=(-H "git-commit: $VCS_COMMIT")
 fi
 
 # Add metadata.json if exists
