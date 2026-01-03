@@ -99,6 +99,10 @@ export const uploads = sqliteTable(
     metadataJson: text("metadata_json"), // Contents of metadata.json
     appJson: text("app_json"), // expo field from app.json
 
+    // Pre-computed asset manifest with hashes (avoids fetching from R2 on manifest requests)
+    // Format: { ios: { launchAsset: {...}, assets: [...] }, android: { launchAsset: {...}, assets: [...] } }
+    assetsManifest: text("assets_manifest"),
+
     // Unique update identifier (UUID format, derived from metadata.json hash)
     updateId: text("update_id"),
 

@@ -18,7 +18,7 @@ import { eq, and, desc, sql } from "drizzle-orm"
 import type { Env } from "../types"
 import { uploads, type NewUpload, type UploadPlatform } from "../db/schema"
 import { uploadKeyMiddleware } from "../middleware/auth"
-import { hashToUuid, hashAsset } from "../services/manifest"
+import { hashToUuid, hashAsset, md5Hash } from "../services/manifest"
 import { resolveAppId } from "../services/helpers"
 
 // Type for uploaded file entries
@@ -239,6 +239,55 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     updateId = hashToUuid(hash)
   }
 
+  // Pre-compute asset hashes to avoid fetching from R2 on manifest requests
+  let assetsManifest: string | null = null
+  if (metadataJson) {
+    const metadata = JSON.parse(metadataJson)
+    const fileDataMap = new Map<string, ArrayBuffer>()
+    for (const f of files) {
+      // Store by relative path (without r2Path prefix)
+      const relativePath = f.path.replace(`${r2Path}/`, "")
+      fileDataMap.set(relativePath, f.data)
+    }
+
+    const platformManifests: Record<string, unknown> = {}
+
+    for (const plat of ["ios", "android"] as const) {
+      const platformMeta = metadata.fileMetadata?.[plat]
+      if (!platformMeta) continue
+
+      // Compute launch asset (bundle) hash
+      const bundleData = fileDataMap.get(platformMeta.bundle)
+      let launchAsset = null
+      if (bundleData) {
+        launchAsset = {
+          hash: await hashAsset(bundleData),
+          key: md5Hash(bundleData),
+          fileExtension: ".bundle",
+          contentType: "application/javascript",
+        }
+      }
+
+      // Compute asset hashes
+      const assets = []
+      for (const asset of platformMeta.assets || []) {
+        const assetData = fileDataMap.get(asset.path)
+        if (assetData) {
+          assets.push({
+            path: asset.path,
+            ext: asset.ext,
+            hash: await hashAsset(assetData),
+            key: md5Hash(assetData),
+          })
+        }
+      }
+
+      platformManifests[plat] = { launchAsset, assets }
+    }
+
+    assetsManifest = JSON.stringify(platformManifests)
+  }
+
   // Create database record
   const newUpload: NewUpload = {
     id: uploadId,
@@ -250,6 +299,7 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     r2Path,
     metadataJson,
     appJson,
+    assetsManifest,
     updateId,
     gitBranch,
     gitCommit,

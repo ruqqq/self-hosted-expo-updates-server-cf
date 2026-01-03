@@ -1,0 +1,1 @@
+ALTER TABLE uploads ADD `assets_manifest` text;

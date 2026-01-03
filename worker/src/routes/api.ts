@@ -112,44 +112,75 @@ async function handleManifest(
     return c.json({ error: `No ${platform} assets in update` }, 404)
   }
 
-  // 7. Build asset list
+  // 7. Build asset list using cached hashes (fast path) or R2 (fallback)
   const publicUrl = c.env.PUBLIC_URL || `https://${c.req.header("host")}`
   const basePath = update.r2Path
 
-  // Build launch asset (main JS bundle)
-  const bundlePath = `${basePath}/${platformMetadata.bundle}`
-  const bundleObject = await c.env.R2.get(bundlePath)
+  let launchAsset: ExpoAsset
+  let assets: ExpoAsset[] = []
 
-  if (!bundleObject) {
-    return c.json({ error: "Bundle not found" }, 500)
-  }
+  // Try to use pre-computed asset manifest (fast path - no R2 fetches needed)
+  const cachedManifest = update.assetsManifest
+    ? JSON.parse(update.assetsManifest)
+    : null
+  const cachedPlatform = cachedManifest?.[platform]
 
-  const bundleData = await bundleObject.arrayBuffer()
-  const launchAsset: ExpoAsset = {
-    hash: await hashAsset(bundleData),
-    key: md5Hash(bundleData),
-    fileExtension: ".bundle",
-    contentType: "application/javascript",
-    url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
-  }
+  if (cachedPlatform?.launchAsset) {
+    // Use cached hashes - just build URLs
+    const bundlePath = `${basePath}/${platformMetadata.bundle}`
+    launchAsset = {
+      hash: cachedPlatform.launchAsset.hash,
+      key: cachedPlatform.launchAsset.key,
+      fileExtension: ".bundle",
+      contentType: "application/javascript",
+      url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
+    }
 
-  // Build other assets
-  const assets: ExpoAsset[] = []
-  for (const asset of platformMetadata.assets || []) {
-    const assetPath = `${basePath}/${asset.path}`
-    const assetObject = await c.env.R2.get(assetPath)
-
-    if (assetObject) {
-      const assetData = await assetObject.arrayBuffer()
+    for (const asset of cachedPlatform.assets || []) {
+      const assetPath = `${basePath}/${asset.path}`
       const contentType = getContentType(asset.ext)
-
       assets.push({
-        hash: await hashAsset(assetData),
-        key: md5Hash(assetData),
+        hash: asset.hash,
+        key: asset.key,
         fileExtension: asset.ext,
         contentType,
         url: `${publicUrl}/api/assets?asset=${encodeURIComponent(assetPath)}&contentType=${encodeURIComponent(contentType)}&platform=${platform}`,
       })
+    }
+  } else {
+    // Fallback: fetch from R2 and compute hashes (slow path for old uploads)
+    const bundlePath = `${basePath}/${platformMetadata.bundle}`
+    const bundleObject = await c.env.R2.get(bundlePath)
+
+    if (!bundleObject) {
+      return c.json({ error: "Bundle not found" }, 500)
+    }
+
+    const bundleData = await bundleObject.arrayBuffer()
+    launchAsset = {
+      hash: await hashAsset(bundleData),
+      key: md5Hash(bundleData),
+      fileExtension: ".bundle",
+      contentType: "application/javascript",
+      url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
+    }
+
+    for (const asset of platformMetadata.assets || []) {
+      const assetPath = `${basePath}/${asset.path}`
+      const assetObject = await c.env.R2.get(assetPath)
+
+      if (assetObject) {
+        const assetData = await assetObject.arrayBuffer()
+        const contentType = getContentType(asset.ext)
+
+        assets.push({
+          hash: await hashAsset(assetData),
+          key: md5Hash(assetData),
+          fileExtension: asset.ext,
+          contentType,
+          url: `${publicUrl}/api/assets?asset=${encodeURIComponent(assetPath)}&contentType=${encodeURIComponent(contentType)}&platform=${platform}`,
+        })
+      }
     }
   }
 
