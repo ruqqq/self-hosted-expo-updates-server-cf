@@ -127,12 +127,26 @@ export function SetupSection({ app }) {
   }
 }`;
 
+  const envFile = `# Expo Updates Server Configuration
+# Add this file to your Expo project root
+
+EXPO_RELEASE_CHANNEL=production
+EXPO_UPLOAD_KEY=${uploadKey || 'YOUR_UPLOAD_KEY'}
+EXPO_API_SERVER=${baseUrl}
+
+# Optional: Set this if using runtimeVersion policy in app.json
+# EXPO_RUNTIME_VERSION=1.0.0`;
+
   const publishScript = `# Download the publish script
 curl -o expo-publish-selfhosted.sh ${baseUrl}/expo-publish-selfhosted.sh
 chmod +x expo-publish-selfhosted.sh
 
-# Publish an update
-./expo-publish-selfhosted.sh production ./my-app ${uploadKey || 'YOUR_UPLOAD_KEY'} ${baseUrl}`;
+# Option 1: Use .env file (recommended)
+# Create .env in your project root, then run:
+./expo-publish-selfhosted.sh
+
+# Option 2: Pass arguments directly
+./expo-publish-selfhosted.sh production . ${uploadKey || 'YOUR_UPLOAD_KEY'} ${baseUrl}`;
 
   return html`
     <details>
@@ -150,8 +164,29 @@ chmod +x expo-publish-selfhosted.sh
 
       <hr />
 
-      <h4>2. Publish Updates</h4>
-      <p>Use the publish script to upload updates:</p>
+      <h4>2. Create .env file</h4>
+      <p>Add this <code>.env</code> file to your Expo project root:</p>
+      <pre>${envFile}</pre>
+      <div class="flex gap">
+        <button
+          onClick=${() => navigator.clipboard?.writeText(envFile)}
+          class="outline secondary"
+        >
+          Copy to Clipboard
+        </button>
+        <button
+          onClick=${() => downloadFile(envFile, '.env')}
+          class="outline secondary"
+        >
+          Download .env
+        </button>
+      </div>
+      <small class="secondary">Remember to add <code>.env</code> to your <code>.gitignore</code>!</small>
+
+      <hr />
+
+      <h4>3. Publish Updates</h4>
+      <p>Download and run the publish script:</p>
       <pre>${publishScript}</pre>
       <button
         onClick=${() => navigator.clipboard?.writeText(publishScript)}
@@ -160,17 +195,9 @@ chmod +x expo-publish-selfhosted.sh
         Copy to Clipboard
       </button>
 
-      ${loadingKey ? html`
-        <p aria-busy="true" class="secondary">Loading upload key...</p>
-      ` : uploadKey ? html`
-        <p class="secondary">
-          <small>Upload Key: <code>${uploadKey}</code></small>
-        </p>
-      ` : null}
-
       <hr />
 
-      <h4>3. Manifest URL</h4>
+      <h4>4. Manifest URL</h4>
       <p>The manifest URL pattern for this app:</p>
       <pre class="mono">${manifestUrl}</pre>
       <small class="secondary">Replace CHANNEL with your release channel (e.g., production, staging)</small>
