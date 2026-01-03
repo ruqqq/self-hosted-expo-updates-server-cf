@@ -1,0 +1,49 @@
+{
+  "name": "expo-updates-worker",
+  "version": "2.0.0",
+  "description": "Self-Hosted Expo Updates Server - Cloudflare Worker",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "build:web": "bash ../scripts/build-web.sh",
+    "setup": "bash ../scripts/setup.sh",
+    "db:generate": "drizzle-kit generate:sqlite",
+    "db:migrate": "wrangler d1 migrations apply expo-updates",
+    "db:migrate:local": "wrangler d1 migrations apply expo-updates --local",
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsgo --noEmit",
+    "lint": "oxlint src/",
+    "lint:fix": "oxlint src/ --fix",
+    "format": "oxfmt --write src/",
+    "format:check": "oxfmt --check src/",
+    "check": "npm run typecheck && npm run lint && npm run format:check",
+    "test": "vitest",
+    "test:e2e": "./scripts/e2e-test.sh",
+    "test:e2e:local": "BASE_URL=http://localhost:3000 ./scripts/e2e-test.sh",
+    "test:e2e:deployed": "./scripts/e2e-test.sh"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "drizzle-orm": "^0.29.0",
+    "bcryptjs": "^2.4.3",
+    "js-md5": "^0.8.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/js-md5": "^0.7.2",
+    "@typescript/native-preview": "^7.0.0-dev",
+    "drizzle-kit": "^0.20.0",
+    "oxfmt": "^0.1.0",
+    "oxlint": "^1.36.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0",
+    "wrangler": "^3.22.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

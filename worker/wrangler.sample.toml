@@ -1,0 +1,36 @@
+# Cloudflare Worker Configuration
+# Self-Hosted Expo Updates Server
+#
+# Copy this file to wrangler.toml and fill in your values:
+#   cp wrangler.sample.toml wrangler.toml
+
+name = "expo-updates-server"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Static assets (Web Dashboard)
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "expo-updates"
+database_id = "<your-database-id>"  # Create with: wrangler d1 create expo-updates
+
+# R2 Bucket for update files
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "expo-updates"  # Create with: wrangler r2 bucket create expo-updates
+
+[vars]
+PUBLIC_URL = "https://expo-updates-server.<your-subdomain>.workers.dev"
+
+# Secrets (set via wrangler secret put):
+# - JWT_SECRET
+# - UPLOAD_KEY
+# - ADMIN_PASSWORD
+
+[dev]
+port = 3000

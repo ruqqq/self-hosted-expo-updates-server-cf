@@ -1,0 +1,16 @@
+# Cloudflare Worker Development Environment Variables
+# Copy this file to .dev.vars and fill in your values
+# .dev.vars is gitignored and contains secrets for local development
+
+# JWT secret for signing authentication tokens
+# Generate with: openssl rand -base64 32
+JWT_SECRET=your-super-secret-jwt-key-change-this
+
+# Upload key for authenticating publish script
+# This key must match the one used in your expo-publish script
+# Generate with: openssl rand -hex 16
+UPLOAD_KEY=your-upload-key-change-this
+
+# Initial admin password (used on first setup)
+# Change this after first login
+ADMIN_PASSWORD=admin123
