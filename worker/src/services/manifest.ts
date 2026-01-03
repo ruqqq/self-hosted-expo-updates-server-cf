@@ -21,19 +21,21 @@ import { md5 } from "./md5"
 // ============================================================================
 
 /**
- * Parse Expo request headers and query parameters.
- * Headers take precedence over query parameters.
+ * Parse Expo request headers, query parameters, and path parameters.
+ * Priority: headers > query params > path params
  */
 export function parseExpoRequest(
   c: Context<{ Bindings: Env }>,
+  pathProject?: string,
+  pathChannel?: string,
 ): ExpoRequestContext | { error: string } {
   const headers = c.req.header()
   const query = c.req.query()
 
-  const project = headers["expo-project"] || query.project
+  const project = headers["expo-project"] || query.project || pathProject
   const platform = headers["expo-platform"] || query.platform
   const runtimeVersion = headers["expo-runtime-version"] || query.version
-  const releaseChannel = headers["expo-channel-name"] || query.channel
+  const releaseChannel = headers["expo-channel-name"] || query.channel || pathChannel
 
   // Validate required fields
   if (!project) {

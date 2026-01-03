@@ -82,6 +82,14 @@ export const uploads = sqliteTable(
       .default("ready")
       .notNull(),
 
+    // Target platform: ios, android, or all (both)
+    // Used when iOS and Android have different runtime versions
+    platform: text("platform", {
+      enum: ["ios", "android", "all"],
+    })
+      .default("all")
+      .notNull(),
+
     // R2 storage path for the update files
     // Format: updates/{project}/{version}/{id}/
     r2Path: text("r2_path").notNull(),
@@ -112,11 +120,12 @@ export const uploads = sqliteTable(
     ),
   },
   (table) => ({
-    // Index for the most common query: find released update by project/version/channel
+    // Index for the most common query: find released update by project/version/channel/platform
     projectVersionChannelIdx: index("uploads_project_version_channel_idx").on(
       table.project,
       table.version,
       table.releaseChannel,
+      table.platform,
       table.status,
     ),
     // Index for listing uploads by project
@@ -193,6 +202,7 @@ export type NewClient = typeof clients.$inferInsert
 
 export type UploadStatus = "ready" | "released" | "obsolete"
 export type Platform = "ios" | "android"
+export type UploadPlatform = "ios" | "android" | "all"
 export type UserRole = "admin" | "user"
 
 // Asset entry in metadata.json

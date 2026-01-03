@@ -411,10 +411,83 @@ else
 fi
 
 # =============================================================================
-# Test 8: Upload Second Bundle (v1.0.1)
+# Test 8: Case-Insensitive Lookups
 # =============================================================================
 
-header "Test 8: Upload Second Bundle (v1.0.1)"
+header "Test 8: Case-Insensitive Lookups"
+
+# Test manifest with lowercase project ID
+LOWERCASE_APP_ID=$(echo "$TEST_APP_ID" | tr '[:upper:]' '[:lower:]')
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${LOWERCASE_APP_ID}" \
+  -H "expo-platform: ios" \
+  -H "expo-runtime-version: 1.0.0" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest - Works with lowercase project ID"
+else
+  fail "GET /api/manifest - Case-insensitive lookup failed, got ${HTTP_CODE}"
+fi
+
+# Test manifest with uppercase project ID
+UPPERCASE_APP_ID=$(echo "$TEST_APP_ID" | tr '[:lower:]' '[:upper:]')
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${UPPERCASE_APP_ID}" \
+  -H "expo-platform: ios" \
+  -H "expo-runtime-version: 1.0.0" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest - Works with uppercase project ID"
+else
+  fail "GET /api/manifest - Case-insensitive lookup failed, got ${HTTP_CODE}"
+fi
+
+# Test path-based manifest URL with lowercase
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest/${LOWERCASE_APP_ID}/production" \
+  -H "expo-platform: ios" \
+  -H "expo-runtime-version: 1.0.0" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest/:project/:channel - Path-based URL works with lowercase"
+else
+  fail "GET /api/manifest/:project/:channel - Path-based lookup failed, got ${HTTP_CODE}"
+fi
+
+# Test GET /apps/:id with different casing
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/apps/${LOWERCASE_APP_ID}" \
+  -H "Authorization: Bearer ${TOKEN}")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /apps/:id - Works with lowercase app ID"
+else
+  fail "GET /apps/:id - Case-insensitive lookup failed, got ${HTTP_CODE}"
+fi
+
+# Test GET /stats/:project with different casing
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/stats/${LOWERCASE_APP_ID}" \
+  -H "Authorization: Bearer ${TOKEN}")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /stats/:project - Works with lowercase project ID"
+else
+  fail "GET /stats/:project - Case-insensitive lookup failed, got ${HTTP_CODE}"
+fi
+
+# =============================================================================
+# Test 9: Upload Second Bundle (v1.0.1)
+# =============================================================================
+
+header "Test 9: Upload Second Bundle (v1.0.1)"
 
 create_mock_bundle "1.0.1"
 
@@ -441,10 +514,10 @@ else
 fi
 
 # =============================================================================
-# Test 9: Release Second Upload
+# Test 10: Release Second Upload
 # =============================================================================
 
-header "Test 9: Release Second Upload"
+header "Test 10: Release Second Upload"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/utils/release" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -472,10 +545,10 @@ else
 fi
 
 # =============================================================================
-# Test 10: Rollback
+# Test 11: Rollback
 # =============================================================================
 
-header "Test 10: Rollback"
+header "Test 11: Rollback"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/utils/rollback" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -515,10 +588,10 @@ else
 fi
 
 # =============================================================================
-# Test 11: Verify Rollback in Manifest
+# Test 12: Verify Rollback in Manifest
 # =============================================================================
 
-header "Test 11: Verify Rollback in Manifest"
+header "Test 12: Verify Rollback in Manifest"
 
 RESPONSE=$(curl -s "${BASE_URL}/api/manifest" \
   -H "expo-project: ${TEST_APP_ID}" \
@@ -537,6 +610,177 @@ else
   else
     fail "GET /api/manifest - Invalid manifest after rollback"
   fi
+fi
+
+# =============================================================================
+# Test 13: Platform-Specific Uploads
+# =============================================================================
+
+header "Test 13: Platform-Specific Uploads"
+
+# Create a new mock bundle for platform-specific test
+create_mock_bundle "2.0.0"
+
+# Upload iOS-only bundle
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/upload" \
+  -H "project: ${TEST_APP_ID}" \
+  -H "version: 2.0.0-ios" \
+  -H "release-channel: production" \
+  -H "platform: ios" \
+  -H "upload-key: ${UPLOAD_KEY}" \
+  -F "metadata.json=@${TEMP_DIR}/metadata.json" \
+  -F "app.json=@${TEMP_DIR}/app.json" \
+  -F "bundles/ios-2.0.0.js=@${TEMP_DIR}/bundles/ios-2.0.0.js" \
+  -F "bundles/android-2.0.0.js=@${TEMP_DIR}/bundles/android-2.0.0.js")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+if [ "$HTTP_CODE" = "201" ]; then
+  IOS_UPLOAD_ID=$(echo "$BODY" | jq -r '.id')
+  UPLOAD_PLATFORM=$(echo "$BODY" | jq -r '.platform')
+  if [ "$UPLOAD_PLATFORM" = "ios" ]; then
+    pass "POST /upload (platform: ios) - Upload created with correct platform"
+  else
+    fail "POST /upload (platform: ios) - Expected platform=ios, got ${UPLOAD_PLATFORM}"
+  fi
+else
+  fail "POST /upload (platform: ios) - HTTP ${HTTP_CODE}"
+  echo "$BODY"
+fi
+
+# Upload Android-only bundle
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/upload" \
+  -H "project: ${TEST_APP_ID}" \
+  -H "version: 2.0.0-android" \
+  -H "release-channel: production" \
+  -H "platform: android" \
+  -H "upload-key: ${UPLOAD_KEY}" \
+  -F "metadata.json=@${TEMP_DIR}/metadata.json" \
+  -F "app.json=@${TEMP_DIR}/app.json" \
+  -F "bundles/ios-2.0.0.js=@${TEMP_DIR}/bundles/ios-2.0.0.js" \
+  -F "bundles/android-2.0.0.js=@${TEMP_DIR}/bundles/android-2.0.0.js")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+if [ "$HTTP_CODE" = "201" ]; then
+  ANDROID_UPLOAD_ID=$(echo "$BODY" | jq -r '.id')
+  UPLOAD_PLATFORM=$(echo "$BODY" | jq -r '.platform')
+  if [ "$UPLOAD_PLATFORM" = "android" ]; then
+    pass "POST /upload (platform: android) - Upload created with correct platform"
+  else
+    fail "POST /upload (platform: android) - Expected platform=android, got ${UPLOAD_PLATFORM}"
+  fi
+else
+  fail "POST /upload (platform: android) - HTTP ${HTTP_CODE}"
+  echo "$BODY"
+fi
+
+# Release both platform-specific uploads
+curl -s -X POST "${BASE_URL}/utils/release" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{\"uploadId\":\"${IOS_UPLOAD_ID}\"}" > /dev/null
+
+curl -s -X POST "${BASE_URL}/utils/release" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{\"uploadId\":\"${ANDROID_UPLOAD_ID}\"}" > /dev/null
+
+pass "Released both platform-specific uploads"
+
+# =============================================================================
+# Test 14: Platform Filtering in Manifest
+# =============================================================================
+
+header "Test 14: Platform Filtering in Manifest"
+
+# iOS should get iOS-only version
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${TEST_APP_ID}" \
+  -H "expo-platform: ios" \
+  -H "expo-runtime-version: 2.0.0-ios" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest (iOS, version 2.0.0-ios) - Returns iOS-specific update"
+else
+  fail "GET /api/manifest (iOS, version 2.0.0-ios) - HTTP ${HTTP_CODE}"
+fi
+
+# iOS should NOT get Android-only version
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${TEST_APP_ID}" \
+  -H "expo-platform: ios" \
+  -H "expo-runtime-version: 2.0.0-android" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "404" ]; then
+  pass "GET /api/manifest (iOS, version 2.0.0-android) - Correctly returns 404"
+else
+  fail "GET /api/manifest (iOS, version 2.0.0-android) - Expected 404, got ${HTTP_CODE}"
+fi
+
+# Android should get Android-only version
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${TEST_APP_ID}" \
+  -H "expo-platform: android" \
+  -H "expo-runtime-version: 2.0.0-android" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest (Android, version 2.0.0-android) - Returns Android-specific update"
+else
+  fail "GET /api/manifest (Android, version 2.0.0-android) - HTTP ${HTTP_CODE}"
+fi
+
+# Android should NOT get iOS-only version
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${TEST_APP_ID}" \
+  -H "expo-platform: android" \
+  -H "expo-runtime-version: 2.0.0-ios" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "404" ]; then
+  pass "GET /api/manifest (Android, version 2.0.0-ios) - Correctly returns 404"
+else
+  fail "GET /api/manifest (Android, version 2.0.0-ios) - Expected 404, got ${HTTP_CODE}"
+fi
+
+# Both platforms should still get "all" platform uploads (v1.0.0 from earlier tests)
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${TEST_APP_ID}" \
+  -H "expo-platform: ios" \
+  -H "expo-runtime-version: 1.0.0" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest (iOS) - Still gets platform='all' uploads"
+else
+  fail "GET /api/manifest (iOS) - Expected 200 for platform='all' upload, got ${HTTP_CODE}"
+fi
+
+RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
+  -H "expo-project: ${TEST_APP_ID}" \
+  -H "expo-platform: android" \
+  -H "expo-runtime-version: 1.0.0" \
+  -H "expo-channel-name: production" \
+  -H "expo-protocol-version: 1")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+if [ "$HTTP_CODE" = "200" ]; then
+  pass "GET /api/manifest (Android) - Still gets platform='all' uploads"
+else
+  fail "GET /api/manifest (Android) - Expected 200 for platform='all' upload, got ${HTTP_CODE}"
 fi
 
 echo ""

@@ -11,6 +11,7 @@ import { eq, and, ne } from "drizzle-orm"
 
 import type { Env } from "../types"
 import { uploads, apps } from "../db/schema"
+import { resolveAppId } from "../services/helpers"
 
 const utilsRouter = new Hono<{ Bindings: Env }>()
 
@@ -143,15 +144,24 @@ utilsRouter.get("/upload-key", async (c) => {
 /**
  * POST /utils/generate-certificate
  * Generate a self-signed certificate for code signing.
+ * Case-insensitive app lookup.
  *
  * Note: This is a simplified version. Full certificate generation
  * with Web Crypto requires additional ASN.1 encoding.
  */
 utilsRouter.post("/generate-certificate", async (c) => {
-  const { appId } = await c.req.json<{ appId: string }>()
+  const { appId: requestedAppId } = await c.req.json<{ appId: string }>()
 
-  if (!appId) {
+  if (!requestedAppId) {
     return c.json({ error: "appId is required" }, 400)
+  }
+
+  const db = drizzle(c.env.DB)
+
+  // Resolve actual app ID (case-insensitive)
+  const appId = await resolveAppId(db, requestedAppId)
+  if (!appId) {
+    return c.json({ error: "App not found" }, 404)
   }
 
   try {
@@ -188,7 +198,6 @@ utilsRouter.post("/generate-certificate", async (c) => {
     const publicKeyPem = `-----BEGIN PUBLIC KEY-----\n${publicKeyBase64.match(/.{1,64}/g)?.join("\n")}\n-----END PUBLIC KEY-----`
 
     // Update app with the new keys
-    const db = drizzle(c.env.DB)
     await db
       .update(apps)
       .set({

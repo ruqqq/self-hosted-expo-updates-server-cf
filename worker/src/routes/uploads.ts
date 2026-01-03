@@ -13,12 +13,13 @@
 import { Hono } from "hono"
 import { jwt } from "hono/jwt"
 import { drizzle } from "drizzle-orm/d1"
-import { eq, and, desc } from "drizzle-orm"
+import { eq, and, desc, sql } from "drizzle-orm"
 
 import type { Env } from "../types"
-import { uploads, type NewUpload } from "../db/schema"
+import { uploads, type NewUpload, type UploadPlatform } from "../db/schema"
 import { uploadKeyMiddleware } from "../middleware/auth"
 import { hashToUuid, hashAsset } from "../services/manifest"
+import { resolveAppId } from "../services/helpers"
 
 // Type for uploaded file entries
 interface UploadedFile {
@@ -40,6 +41,7 @@ const jwtMiddlewareHandler = (c: any, next: any) => {
 /**
  * GET /uploads
  * List uploads, optionally filtered by project/version/channel.
+ * Project filter is case-insensitive.
  */
 uploadsRouter.get("/", jwtMiddlewareHandler, async (c) => {
   const db = drizzle(c.env.DB)
@@ -51,7 +53,8 @@ uploadsRouter.get("/", jwtMiddlewareHandler, async (c) => {
 
   // Build where conditions
   const conditions = []
-  if (project) conditions.push(eq(uploads.project, project))
+  // Case-insensitive project filter
+  if (project) conditions.push(sql`LOWER(${uploads.project}) = LOWER(${project})`)
   if (version) conditions.push(eq(uploads.version, version))
   if (channel) conditions.push(eq(uploads.releaseChannel, channel))
 
@@ -164,13 +167,21 @@ uploadsRouter.delete("/:id", jwtMiddlewareHandler, async (c) => {
  * The publish script should upload files individually or as a structured payload.
  */
 uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
-  const project = c.req.header("project")
+  const requestedProject = c.req.header("project")
   const version = c.req.header("version")
   const releaseChannel = c.req.header("release-channel")
   const gitBranch = c.req.header("git-branch")
   const gitCommit = c.req.header("git-commit")
+  const platformHeader = c.req.header("platform")
 
-  if (!project || !version || !releaseChannel) {
+  // Validate platform header if provided
+  const validPlatforms: UploadPlatform[] = ["ios", "android", "all"]
+  const platform: UploadPlatform =
+    platformHeader && validPlatforms.includes(platformHeader as UploadPlatform)
+      ? (platformHeader as UploadPlatform)
+      : "all"
+
+  if (!requestedProject || !version || !releaseChannel) {
     return c.json(
       {
         error: "Missing required headers: project, version, release-channel",
@@ -180,6 +191,12 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   }
 
   const db = drizzle(c.env.DB)
+
+  // Resolve actual app ID (case-insensitive)
+  const project = await resolveAppId(db, requestedProject)
+  if (!project) {
+    return c.json({ error: `App not found: ${requestedProject}` }, 404)
+  }
   const uploadId = crypto.randomUUID()
   const r2Path = `updates/${project}/${version}/${uploadId}`
 
@@ -228,6 +245,7 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     project,
     version,
     releaseChannel,
+    platform,
     status: "ready",
     r2Path,
     metadataJson,
@@ -246,6 +264,7 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     {
       id: uploadId,
       updateId,
+      platform,
       status: "ready",
       message: "Upload successful. Use the dashboard to release this update.",
     },

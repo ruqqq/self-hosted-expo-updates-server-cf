@@ -9,9 +9,9 @@
  * - GET /api/assets   - Returns asset files from R2
  */
 
-import { Hono } from "hono"
+import { Hono, Context } from "hono"
 import { drizzle } from "drizzle-orm/d1"
-import { eq, and, desc } from "drizzle-orm"
+import { eq, and, desc, sql } from "drizzle-orm"
 
 import type {
   Env,
@@ -28,26 +28,41 @@ import {
   hashAsset,
   md5Hash,
 } from "../services/manifest"
+import { resolveAppId } from "../services/helpers"
 
 const api = new Hono<{ Bindings: Env }>()
 
 // ============================================================================
-// GET /api/manifest
+// GET /api/manifest and /api/manifest/:project/:channel
 // ============================================================================
 // Returns the update manifest for the requesting Expo client.
 // Response format: multipart/mixed with manifest JSON and extensions JSON.
+// Supports both query params and path-based routing.
+
+api.get("/manifest/:project/:channel", async (c) => {
+  return handleManifest(c, c.req.param("project"), c.req.param("channel"))
+})
 
 api.get("/manifest", async (c) => {
+  return handleManifest(c)
+})
+
+async function handleManifest(
+  c: Context<{ Bindings: Env }>,
+  pathProject?: string,
+  pathChannel?: string,
+) {
   const db = drizzle(c.env.DB)
 
-  // 1. Parse request parameters from headers/query
-  const params = parseExpoRequest(c)
+  // 1. Parse request parameters from headers/query/path
+  const params = parseExpoRequest(c, pathProject, pathChannel)
+
   if ("error" in params) {
     return c.json({ error: params.error }, 400)
   }
 
   const {
-    project,
+    project: requestedProject,
     platform,
     runtimeVersion,
     releaseChannel,
@@ -55,12 +70,19 @@ api.get("/manifest", async (c) => {
     clientId,
   } = params
 
-  // 2. Track client device (async, don't block response)
-  if (clientId) {
-    trackClient(db, params).catch(console.error)
+  // 2. Resolve actual app ID (case-insensitive lookup)
+  const project = await resolveAppId(db, requestedProject)
+  if (!project) {
+    return c.json({ message: "No updates available" }, 404)
   }
 
-  // 3. Query for latest released update matching criteria
+  // 3. Track client device (async, don't block response)
+  if (clientId) {
+    trackClient(db, { ...params, project }).catch(console.error)
+  }
+
+  // 4. Query for latest released update matching criteria
+  // Platform filter: match exact platform OR 'all' (both platforms)
   const [update] = await db
     .select()
     .from(uploads)
@@ -69,18 +91,19 @@ api.get("/manifest", async (c) => {
         eq(uploads.project, project),
         eq(uploads.version, runtimeVersion),
         eq(uploads.releaseChannel, releaseChannel),
+        sql`(${uploads.platform} = ${platform} OR ${uploads.platform} = 'all')`,
         eq(uploads.status, "released"),
       ),
     )
     .orderBy(desc(uploads.releasedAt))
     .limit(1)
 
-  // 4. No update found
+  // 5. No update found
   if (!update) {
     return c.json({ message: "No updates available" }, 404)
   }
 
-  // 5. Parse cached metadata
+  // 6. Parse cached metadata
   const metadata = JSON.parse(update.metadataJson || "{}")
   const appJson = JSON.parse(update.appJson || "{}")
   const platformMetadata = metadata.fileMetadata?.[platform]
@@ -89,7 +112,7 @@ api.get("/manifest", async (c) => {
     return c.json({ error: `No ${platform} assets in update` }, 404)
   }
 
-  // 6. Build asset list
+  // 7. Build asset list
   const publicUrl = c.env.PUBLIC_URL || `https://${c.req.header("host")}`
   const basePath = update.r2Path
 
@@ -130,7 +153,7 @@ api.get("/manifest", async (c) => {
     }
   }
 
-  // 7. Build manifest
+  // 8. Build manifest
   const manifest: ExpoManifest = {
     id: update.updateId || update.id,
     createdAt: new Date(update.createdAt!).toISOString(),
@@ -143,7 +166,7 @@ api.get("/manifest", async (c) => {
     },
   }
 
-  // 8. Sign manifest if requested
+  // 9. Sign manifest if requested
   let signature: string | undefined
   if (expectSignature) {
     const [app] = await db
@@ -157,19 +180,19 @@ api.get("/manifest", async (c) => {
     }
   }
 
-  // 9. Build extensions
+  // 10. Build extensions
   const extensions: ManifestExtensions = {
     assetRequestHeaders: {},
   }
 
-  // 10. Return multipart response
+  // 11. Return multipart response
   return createMultipartResponse(
     manifest,
     extensions,
     signature,
     params.protocolVersion,
   )
-})
+}
 
 // ============================================================================
 // GET /api/assets

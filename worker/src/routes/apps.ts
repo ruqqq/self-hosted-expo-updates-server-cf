@@ -8,10 +8,11 @@
 import { Hono } from "hono"
 import { jwt } from "hono/jwt"
 import { drizzle } from "drizzle-orm/d1"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 
 import type { Env } from "../types"
 import { apps, type NewApp } from "../db/schema"
+import { resolveAppId } from "../services/helpers"
 
 const appsRouter = new Hono<{ Bindings: Env }>()
 
@@ -40,13 +41,18 @@ appsRouter.get("/", async (c) => {
 
 /**
  * GET /apps/:id
- * Get a single application by ID (slug).
+ * Get a single application by ID (slug). Case-insensitive lookup.
  */
 appsRouter.get("/:id", async (c) => {
   const id = c.req.param("id")
   const db = drizzle(c.env.DB)
 
-  const [app] = await db.select().from(apps).where(eq(apps.id, id)).limit(1)
+  // Case-insensitive lookup
+  const [app] = await db
+    .select()
+    .from(apps)
+    .where(sql`LOWER(${apps.id}) = LOWER(${id})`)
+    .limit(1)
 
   if (!app) {
     return c.json({ error: "App not found" }, 404)
@@ -71,11 +77,11 @@ appsRouter.post("/", async (c) => {
     return c.json({ error: "App ID (slug) is required" }, 400)
   }
 
-  // Check if app already exists
+  // Check if app already exists (case-insensitive)
   const [existing] = await db
     .select()
     .from(apps)
-    .where(eq(apps.id, body.id))
+    .where(sql`LOWER(${apps.id}) = LOWER(${body.id})`)
     .limit(1)
 
   if (existing) {
@@ -98,20 +104,16 @@ appsRouter.post("/", async (c) => {
 
 /**
  * PATCH /apps/:id
- * Update an application.
+ * Update an application. Case-insensitive lookup.
  */
 appsRouter.patch("/:id", async (c) => {
   const id = c.req.param("id")
   const body = await c.req.json<Partial<NewApp>>()
   const db = drizzle(c.env.DB)
 
-  const [existing] = await db
-    .select()
-    .from(apps)
-    .where(eq(apps.id, id))
-    .limit(1)
-
-  if (!existing) {
+  // Resolve actual app ID (case-insensitive)
+  const actualId = await resolveAppId(db, id)
+  if (!actualId) {
     return c.json({ error: "App not found" }, 404)
   }
 
@@ -121,22 +123,28 @@ appsRouter.patch("/:id", async (c) => {
       ...body,
       updatedAt: new Date(),
     })
-    .where(eq(apps.id, id))
+    .where(eq(apps.id, actualId))
 
   return c.json({ success: true })
 })
 
 /**
  * DELETE /apps/:id
- * Delete an application and all its uploads.
+ * Delete an application and all its uploads. Case-insensitive lookup.
  */
 appsRouter.delete("/:id", async (c) => {
   const id = c.req.param("id")
   const db = drizzle(c.env.DB)
 
+  // Resolve actual app ID (case-insensitive)
+  const actualId = await resolveAppId(db, id)
+  if (!actualId) {
+    return c.json({ error: "App not found" }, 404)
+  }
+
   // TODO: Also delete uploads from R2
 
-  await db.delete(apps).where(eq(apps.id, id))
+  await db.delete(apps).where(eq(apps.id, actualId))
 
   return c.json({ success: true })
 })

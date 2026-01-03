@@ -8,7 +8,7 @@
 import { Hono } from "hono"
 import { jwt } from "hono/jwt"
 import { drizzle } from "drizzle-orm/d1"
-import { eq, desc } from "drizzle-orm"
+import { eq, desc, sql } from "drizzle-orm"
 
 import type { Env } from "../types"
 import { clients } from "../db/schema"
@@ -24,6 +24,7 @@ clientsRouter.use("*", (c, next) => {
 /**
  * GET /clients
  * List clients, optionally filtered by project.
+ * Project filter is case-insensitive.
  */
 clientsRouter.get("/", async (c) => {
   const db = drizzle(c.env.DB)
@@ -32,7 +33,8 @@ clientsRouter.get("/", async (c) => {
   let query = db.select().from(clients)
 
   if (project) {
-    query = (query.where(eq(clients.project, project)) as typeof query)
+    // Case-insensitive project filter
+    query = (query.where(sql`LOWER(${clients.project}) = LOWER(${project})`) as typeof query)
   }
 
   const results = await query.orderBy(desc(clients.lastSeen))

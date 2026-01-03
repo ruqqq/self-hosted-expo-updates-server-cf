@@ -11,6 +11,7 @@ import { eq, sql, count } from "drizzle-orm"
 
 import type { Env } from "../types"
 import { clients, uploads } from "../db/schema"
+import { resolveAppId } from "../services/helpers"
 
 const statsRouter = new Hono<{ Bindings: Env }>()
 
@@ -22,11 +23,17 @@ statsRouter.use("*", (c, next) => {
 
 /**
  * GET /stats/:project
- * Get statistics for a specific project.
+ * Get statistics for a specific project. Case-insensitive project lookup.
  */
 statsRouter.get("/:project", async (c) => {
-  const project = c.req.param("project")
+  const requestedProject = c.req.param("project")
   const db = drizzle(c.env.DB)
+
+  // Resolve actual app ID (case-insensitive)
+  const project = await resolveAppId(db, requestedProject)
+  if (!project) {
+    return c.json({ error: "Project not found" }, 404)
+  }
 
   // Get client counts by platform
   const platformStats = await db
