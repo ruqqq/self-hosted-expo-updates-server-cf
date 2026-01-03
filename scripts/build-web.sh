@@ -1,60 +1,38 @@
 #!/bin/bash
 # Build Web Dashboard for Cloudflare Worker
 #
-# This script builds the React dashboard and copies it to worker/public
-# for serving as static assets.
+# This script copies the dashboard files to worker/public
+# for serving as static assets. No build step required!
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-WEB_DIR="$ROOT_DIR/Web"
-WORKER_DIR="$ROOT_DIR/worker"
-PUBLIC_DIR="$WORKER_DIR/public"
+DASHBOARD_DIR="$ROOT_DIR/worker/dashboard"
+PUBLIC_DIR="$ROOT_DIR/worker/public"
 
-echo "🔨 Building Web Dashboard..."
-echo "  Source: $WEB_DIR"
+echo "📋 Copying Dashboard to worker/public..."
+echo "  Source: $DASHBOARD_DIR"
 echo "  Output: $PUBLIC_DIR"
 
-# Check if Web directory exists
-if [ ! -d "$WEB_DIR" ]; then
-  echo "❌ Error: Web directory not found at $WEB_DIR"
+# Check if dashboard directory exists
+if [ ! -d "$DASHBOARD_DIR" ]; then
+  echo "❌ Error: Dashboard directory not found at $DASHBOARD_DIR"
   exit 1
 fi
 
-# Install dependencies if needed
-if [ ! -d "$WEB_DIR/node_modules" ]; then
-  echo "📦 Installing Web dependencies..."
-  cd "$WEB_DIR"
-  yarn install
-fi
-
-# Build the web app
-echo "🏗️  Building production bundle..."
-cd "$WEB_DIR"
-yarn run build 2>/dev/null || npx vite build
-
-# Check if build was successful
-if [ ! -d "$WEB_DIR/dist" ]; then
-  echo "❌ Error: Build failed - dist directory not found"
-  exit 1
-fi
-
-# Clean previous build
+# Clean previous build (but keep .gitkeep if exists)
 echo "🧹 Cleaning previous build..."
-rm -rf "$PUBLIC_DIR"/*
+find "$PUBLIC_DIR" -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
 mkdir -p "$PUBLIC_DIR"
 
-# Copy build output
-echo "📋 Copying build output..."
-cp -r "$WEB_DIR/dist/"* "$PUBLIC_DIR/"
-
-# Remove env-config.js if it exists (we generate it dynamically)
-rm -f "$PUBLIC_DIR/env-config.js"
+# Copy dashboard files
+echo "📋 Copying dashboard files..."
+cp -r "$DASHBOARD_DIR/"* "$PUBLIC_DIR/"
 
 # Count files
 FILE_COUNT=$(find "$PUBLIC_DIR" -type f | wc -l)
-echo "✅ Build complete! $FILE_COUNT files copied to worker/public"
+echo "✅ Done! $FILE_COUNT files copied to worker/public"
 echo ""
 echo "Next steps:"
 echo "  1. cd worker"

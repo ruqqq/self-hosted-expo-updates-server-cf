@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expo Updates Server</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "preact": "https://esm.sh/preact@10",
+      "preact/hooks": "https://esm.sh/preact@10/hooks",
+      "htm": "https://esm.sh/htm@3"
+    }
+  }
+  </script>
+  <style>
+    :root {
+      --pico-font-size: 16px;
+    }
+    .status-released { color: var(--pico-ins-color); }
+    .status-ready { color: var(--pico-primary); }
+    .status-obsolete { color: var(--pico-muted-color); }
+    .mono { font-family: var(--pico-font-family-monospace); font-size: 0.875em; }
+    .text-right { text-align: right; }
+    .gap { gap: 1rem; }
+    .flex { display: flex; }
+    .flex-wrap { flex-wrap: wrap; }
+    .items-center { align-items: center; }
+    .justify-between { justify-content: space-between; }
+    .mt-0 { margin-top: 0; }
+    .mb-0 { margin-bottom: 0; }
+    .mb-1 { margin-bottom: 0.5rem; }
+    .w-full { width: 100%; }
+    .hidden { display: none; }
+    pre { white-space: pre-wrap; word-break: break-all; }
+    details summary { cursor: pointer; }
+    details[open] summary { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
