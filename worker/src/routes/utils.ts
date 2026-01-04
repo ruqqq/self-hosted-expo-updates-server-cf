@@ -1,7 +1,7 @@
 /**
  * Utils Routes
  *
- * Utility endpoints for releasing updates, generating certificates, etc.
+ * Utility endpoints for releasing updates, rollbacks, etc.
  */
 
 import { Hono } from "hono"
@@ -10,8 +10,7 @@ import { drizzle } from "drizzle-orm/d1"
 import { eq, and, ne } from "drizzle-orm"
 
 import type { Env } from "../types"
-import { uploads, apps } from "../db/schema"
-import { resolveAppId } from "../services/helpers"
+import { uploads } from "../db/schema"
 
 const utilsRouter = new Hono<{ Bindings: Env }>()
 
@@ -139,87 +138,6 @@ utilsRouter.post("/rollback", async (c) => {
  */
 utilsRouter.get("/upload-key", async (c) => {
   return c.json({ uploadKey: c.env.UPLOAD_KEY })
-})
-
-/**
- * POST /utils/generate-certificate
- * Generate a self-signed certificate for code signing.
- * Case-insensitive app lookup.
- *
- * Note: This is a simplified version. Full certificate generation
- * with Web Crypto requires additional ASN.1 encoding.
- */
-utilsRouter.post("/generate-certificate", async (c) => {
-  const { appId: requestedAppId } = await c.req.json<{ appId: string }>()
-
-  if (!requestedAppId) {
-    return c.json({ error: "appId is required" }, 400)
-  }
-
-  const db = drizzle(c.env.DB)
-
-  // Resolve actual app ID (case-insensitive)
-  const appId = await resolveAppId(db, requestedAppId)
-  if (!appId) {
-    return c.json({ error: "App not found" }, 404)
-  }
-
-  try {
-    // Generate RSA key pair
-    const keyPair = (await crypto.subtle.generateKey(
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        modulusLength: 2048,
-        publicExponent: new Uint8Array([1, 0, 1]),
-        hash: "SHA-256",
-      },
-      true,
-      ["sign", "verify"],
-    )) as CryptoKeyPair
-
-    // Export private key as PKCS#8
-    const privateKeyBuffer = (await crypto.subtle.exportKey(
-      "pkcs8",
-      keyPair.privateKey,
-    )) as ArrayBuffer
-    const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyBuffer)),
-    )
-    const privateKeyPem = `-----BEGIN PRIVATE KEY-----\n${privateKeyBase64.match(/.{1,64}/g)?.join("\n")}\n-----END PRIVATE KEY-----`
-
-    // Export public key as SPKI
-    const publicKeyBuffer = (await crypto.subtle.exportKey(
-      "spki",
-      keyPair.publicKey,
-    )) as ArrayBuffer
-    const publicKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(publicKeyBuffer)),
-    )
-    const publicKeyPem = `-----BEGIN PUBLIC KEY-----\n${publicKeyBase64.match(/.{1,64}/g)?.join("\n")}\n-----END PUBLIC KEY-----`
-
-    // Update app with the new keys
-    await db
-      .update(apps)
-      .set({
-        privateKey: privateKeyPem,
-        certificate: publicKeyPem, // Note: This is the public key, not a full certificate
-        updatedAt: new Date(),
-      })
-      .where(eq(apps.id, appId))
-
-    return c.json({
-      success: true,
-      message: "Key pair generated and saved",
-      publicKey: publicKeyPem,
-      // Note: For Expo code signing, you'll need a proper X.509 certificate.
-      // Consider using a tool like openssl for production certificates.
-      warning:
-        "This generates a key pair, not a full X.509 certificate. For production, use proper certificate generation.",
-    })
-  } catch (error) {
-    console.error("Certificate generation failed:", error)
-    return c.json({ error: "Failed to generate certificate" }, 500)
-  }
 })
 
 export { utilsRouter as utilsRoutes }

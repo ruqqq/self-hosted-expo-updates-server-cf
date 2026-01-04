@@ -119,48 +119,8 @@ export function createMultipartResponse(
 }
 
 // ============================================================================
-// CRYPTOGRAPHIC OPERATIONS
+// CRYPTOGRAPHIC OPERATIONS (for asset hashing during upload)
 // ============================================================================
-
-/**
- * Sign manifest using RSA-SHA256.
- * Returns signature in Structured Headers format: sig="<base64>", keyid="main"
- */
-export async function signManifest(
-  manifestJson: string,
-  privateKeyPem: string,
-): Promise<string> {
-  try {
-    // Parse PEM to get raw key bytes
-    const keyData = pemToArrayBuffer(privateKeyPem)
-
-    // Import as CryptoKey
-    const privateKey = await crypto.subtle.importKey(
-      "pkcs8",
-      keyData,
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-256",
-      },
-      false,
-      ["sign"],
-    )
-
-    // Sign the manifest
-    const signature = await crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      privateKey,
-      new TextEncoder().encode(manifestJson),
-    )
-
-    // Encode as base64 and format as Structured Headers dictionary
-    const base64Signature = arrayBufferToBase64(signature)
-    return `sig="${base64Signature}", keyid="main"`
-  } catch (error) {
-    console.error("Failed to sign manifest:", error)
-    throw new Error("Manifest signing failed")
-  }
-}
 
 /**
  * Compute SHA256 hash of asset data, encoded as Base64URL.
@@ -203,25 +163,6 @@ export function hashToUuid(hash: string): string {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Convert PEM-encoded key to ArrayBuffer.
- */
-function pemToArrayBuffer(pem: string): ArrayBuffer {
-  // Remove PEM headers and whitespace
-  const base64 = pem
-    .replace(/-----BEGIN [A-Z ]+-----/, "")
-    .replace(/-----END [A-Z ]+-----/, "")
-    .replace(/\s/g, "")
-
-  // Decode base64 to binary
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes.buffer
-}
 
 /**
  * Convert ArrayBuffer to base64 string.

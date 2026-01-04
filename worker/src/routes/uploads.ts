@@ -174,6 +174,10 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   const gitCommit = c.req.header("git-commit")
   const platformHeader = c.req.header("platform")
 
+  // Client-side code signing headers
+  const signedManifestB64 = c.req.header("x-signed-manifest") // Base64-encoded manifest JSON
+  const manifestSignature = c.req.header("x-manifest-signature") // sig="...", keyid="main"
+
   // Validate platform header if provided
   const validPlatforms: UploadPlatform[] = ["ios", "android", "all"]
   const platform: UploadPlatform =
@@ -288,6 +292,16 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     assetsManifest = JSON.stringify(platformManifests)
   }
 
+  // Decode signed manifest if provided
+  let signedManifest: string | null = null
+  if (signedManifestB64) {
+    try {
+      signedManifest = atob(signedManifestB64)
+    } catch {
+      return c.json({ error: "Invalid x-signed-manifest: must be base64 encoded" }, 400)
+    }
+  }
+
   // Create database record
   const newUpload: NewUpload = {
     id: uploadId,
@@ -301,6 +315,8 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     appJson,
     assetsManifest,
     updateId,
+    signedManifest,
+    manifestSignature: manifestSignature || null,
     gitBranch,
     gitCommit,
     size: files.reduce((sum, f) => sum + f.data.byteLength, 0),

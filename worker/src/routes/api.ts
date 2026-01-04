@@ -20,11 +20,10 @@ import type {
   ExpoAsset,
   ManifestExtensions,
 } from "../types"
-import { uploads, clients, apps } from "../db/schema"
+import { uploads, clients } from "../db/schema"
 import {
   parseExpoRequest,
   createMultipartResponse,
-  signManifest,
   hashAsset,
   md5Hash,
 } from "../services/manifest"
@@ -103,120 +102,124 @@ async function handleManifest(
     return c.json({ message: "No updates available" }, 404)
   }
 
-  // 6. Parse cached metadata
-  const metadata = JSON.parse(update.metadataJson || "{}")
-  const appJson = JSON.parse(update.appJson || "{}")
-  const platformMetadata = metadata.fileMetadata?.[platform]
+  let manifest: ExpoManifest
+  let signature: string | undefined
 
-  if (!platformMetadata) {
-    return c.json({ error: `No ${platform} assets in update` }, 404)
-  }
+  // 6. Check for pre-signed manifest (client-side code signing)
+  if (update.signedManifest) {
+    // Use pre-signed manifest
+    const signedManifests = JSON.parse(update.signedManifest) as Record<string, ExpoManifest>
+    const signatures = update.manifestSignature
+      ? (JSON.parse(update.manifestSignature) as Record<string, string>)
+      : {}
 
-  // 7. Build asset list using cached hashes (fast path) or R2 (fallback)
-  const publicUrl = c.env.PUBLIC_URL || `https://${c.req.header("host")}`
-  const basePath = update.r2Path
-
-  let launchAsset: ExpoAsset
-  let assets: ExpoAsset[] = []
-
-  // Try to use pre-computed asset manifest (fast path - no R2 fetches needed)
-  const cachedManifest = update.assetsManifest
-    ? JSON.parse(update.assetsManifest)
-    : null
-  const cachedPlatform = cachedManifest?.[platform]
-
-  if (cachedPlatform?.launchAsset) {
-    // Use cached hashes - just build URLs
-    const bundlePath = `${basePath}/${platformMetadata.bundle}`
-    launchAsset = {
-      hash: cachedPlatform.launchAsset.hash,
-      key: cachedPlatform.launchAsset.key,
-      fileExtension: ".bundle",
-      contentType: "application/javascript",
-      url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
+    const platformManifest = signedManifests[platform]
+    if (!platformManifest) {
+      return c.json({ error: `No ${platform} manifest in update` }, 404)
     }
 
-    for (const asset of cachedPlatform.assets || []) {
-      const assetPath = `${basePath}/${asset.path}`
-      const contentType = getContentType(asset.ext)
-      assets.push({
-        hash: asset.hash,
-        key: asset.key,
-        fileExtension: asset.ext,
-        contentType,
-        url: `${publicUrl}/api/assets?asset=${encodeURIComponent(assetPath)}&contentType=${encodeURIComponent(contentType)}&platform=${platform}`,
-      })
-    }
+    manifest = platformManifest
+    signature = signatures[platform]
   } else {
-    // Fallback: fetch from R2 and compute hashes (slow path for old uploads)
-    const bundlePath = `${basePath}/${platformMetadata.bundle}`
-    const bundleObject = await c.env.R2.get(bundlePath)
+    // Build manifest dynamically (unsigned)
+    const metadata = JSON.parse(update.metadataJson || "{}")
+    const appJson = JSON.parse(update.appJson || "{}")
+    const platformMetadata = metadata.fileMetadata?.[platform]
 
-    if (!bundleObject) {
-      return c.json({ error: "Bundle not found" }, 500)
+    if (!platformMetadata) {
+      return c.json({ error: `No ${platform} assets in update` }, 404)
     }
 
-    const bundleData = await bundleObject.arrayBuffer()
-    launchAsset = {
-      hash: await hashAsset(bundleData),
-      key: md5Hash(bundleData),
-      fileExtension: ".bundle",
-      contentType: "application/javascript",
-      url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
-    }
+    const publicUrl = c.env.PUBLIC_URL || `https://${c.req.header("host")}`
+    const basePath = update.r2Path
 
-    for (const asset of platformMetadata.assets || []) {
-      const assetPath = `${basePath}/${asset.path}`
-      const assetObject = await c.env.R2.get(assetPath)
+    let launchAsset: ExpoAsset
+    let assets: ExpoAsset[] = []
 
-      if (assetObject) {
-        const assetData = await assetObject.arrayBuffer()
+    // Try to use pre-computed asset manifest (fast path - no R2 fetches needed)
+    const cachedManifest = update.assetsManifest
+      ? JSON.parse(update.assetsManifest)
+      : null
+    const cachedPlatform = cachedManifest?.[platform]
+
+    if (cachedPlatform?.launchAsset) {
+      // Use cached hashes - just build URLs
+      const bundlePath = `${basePath}/${platformMetadata.bundle}`
+      launchAsset = {
+        hash: cachedPlatform.launchAsset.hash,
+        key: cachedPlatform.launchAsset.key,
+        fileExtension: ".bundle",
+        contentType: "application/javascript",
+        url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
+      }
+
+      for (const asset of cachedPlatform.assets || []) {
+        const assetPath = `${basePath}/${asset.path}`
         const contentType = getContentType(asset.ext)
-
         assets.push({
-          hash: await hashAsset(assetData),
-          key: md5Hash(assetData),
+          hash: asset.hash,
+          key: asset.key,
           fileExtension: asset.ext,
           contentType,
           url: `${publicUrl}/api/assets?asset=${encodeURIComponent(assetPath)}&contentType=${encodeURIComponent(contentType)}&platform=${platform}`,
         })
       }
+    } else {
+      // Fallback: fetch from R2 and compute hashes (slow path for old uploads)
+      const bundlePath = `${basePath}/${platformMetadata.bundle}`
+      const bundleObject = await c.env.R2.get(bundlePath)
+
+      if (!bundleObject) {
+        return c.json({ error: "Bundle not found" }, 500)
+      }
+
+      const bundleData = await bundleObject.arrayBuffer()
+      launchAsset = {
+        hash: await hashAsset(bundleData),
+        key: md5Hash(bundleData),
+        fileExtension: ".bundle",
+        contentType: "application/javascript",
+        url: `${publicUrl}/api/assets?asset=${encodeURIComponent(bundlePath)}&contentType=${encodeURIComponent("application/javascript")}&platform=${platform}`,
+      }
+
+      for (const asset of platformMetadata.assets || []) {
+        const assetPath = `${basePath}/${asset.path}`
+        const assetObject = await c.env.R2.get(assetPath)
+
+        if (assetObject) {
+          const assetData = await assetObject.arrayBuffer()
+          const contentType = getContentType(asset.ext)
+
+          assets.push({
+            hash: await hashAsset(assetData),
+            key: md5Hash(assetData),
+            fileExtension: asset.ext,
+            contentType,
+            url: `${publicUrl}/api/assets?asset=${encodeURIComponent(assetPath)}&contentType=${encodeURIComponent(contentType)}&platform=${platform}`,
+          })
+        }
+      }
+    }
+
+    manifest = {
+      id: update.updateId || update.id,
+      createdAt: new Date(update.createdAt!).toISOString(),
+      runtimeVersion,
+      launchAsset,
+      assets,
+      metadata: {},
+      extra: {
+        expoClient: appJson,
+      },
     }
   }
 
-  // 8. Build manifest
-  const manifest: ExpoManifest = {
-    id: update.updateId || update.id,
-    createdAt: new Date(update.createdAt!).toISOString(),
-    runtimeVersion,
-    launchAsset,
-    assets,
-    metadata: {},
-    extra: {
-      expoClient: appJson,
-    },
-  }
-
-  // 9. Sign manifest if requested
-  let signature: string | undefined
-  if (expectSignature) {
-    const [app] = await db
-      .select()
-      .from(apps)
-      .where(eq(apps.id, project))
-      .limit(1)
-
-    if (app?.privateKey) {
-      signature = await signManifest(JSON.stringify(manifest), app.privateKey)
-    }
-  }
-
-  // 10. Build extensions
+  // 7. Build extensions
   const extensions: ManifestExtensions = {
     assetRequestHeaders: {},
   }
 
-  // 11. Return multipart response
+  // 8. Return multipart response
   return createMultipartResponse(
     manifest,
     extensions,

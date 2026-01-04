@@ -29,14 +29,7 @@ appsRouter.use("*", (c, next) => {
 appsRouter.get("/", async (c) => {
   const db = drizzle(c.env.DB)
   const allApps = await db.select().from(apps)
-
-  // Don't expose private keys in list
-  return c.json(
-    allApps.map((app) => ({
-      ...app,
-      privateKey: app.privateKey ? "[REDACTED]" : null,
-    })),
-  )
+  return c.json(allApps)
 })
 
 /**
@@ -58,11 +51,7 @@ appsRouter.get("/:id", async (c) => {
     return c.json({ error: "App not found" }, 404)
   }
 
-  return c.json({
-    ...app,
-    privateKey: app.privateKey ? "[REDACTED]" : null,
-    hasPrivateKey: !!app.privateKey,
-  })
+  return c.json(app)
 })
 
 /**
@@ -91,8 +80,6 @@ appsRouter.post("/", async (c) => {
   const newApp: NewApp = {
     id: body.id,
     name: body.name || body.id,
-    privateKey: body.privateKey,
-    certificate: body.certificate,
     createdAt: new Date(),
     updatedAt: new Date(),
   }
