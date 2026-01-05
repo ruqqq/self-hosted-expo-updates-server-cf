@@ -102,23 +102,27 @@ async function handleManifest(
     return c.json({ message: "No updates available" }, 404)
   }
 
-  let manifest: ExpoManifest
+  let manifest: ExpoManifest | null = null
+  let manifestString: string | undefined
   let signature: string | undefined
 
   // 6. Check for pre-signed manifest (client-side code signing)
   if (update.signedManifest) {
-    // Use pre-signed manifest
-    const signedManifests = JSON.parse(update.signedManifest) as Record<string, ExpoManifest>
+    // Use pre-signed manifest - manifests are stored as strings to preserve exact JSON for signature verification
+    const signedManifests = JSON.parse(update.signedManifest) as Record<string, string>
     const signatures = update.manifestSignature
       ? (JSON.parse(update.manifestSignature) as Record<string, string>)
       : {}
 
-    const platformManifest = signedManifests[platform]
-    if (!platformManifest) {
+    const platformManifestString = signedManifests[platform]
+    if (!platformManifestString) {
       return c.json({ error: `No ${platform} manifest in update` }, 404)
     }
 
-    manifest = platformManifest
+    // Keep the exact string for signature verification
+    manifestString = platformManifestString
+    // Also parse into object for consistency
+    manifest = JSON.parse(platformManifestString)
     signature = signatures[platform]
   } else {
     // Build manifest dynamically (unsigned)
@@ -225,6 +229,7 @@ async function handleManifest(
     extensions,
     signature,
     params.protocolVersion,
+    manifestString,
   )
 }
 

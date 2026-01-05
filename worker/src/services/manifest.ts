@@ -71,12 +71,19 @@ export function parseExpoRequest(
 /**
  * Create a multipart/mixed response for Expo manifest.
  * Format follows the Expo Updates protocol specification.
+ *
+ * @param manifest - The manifest object (will be stringified) OR a pre-stringified manifest
+ * @param extensions - The extensions object
+ * @param signature - Optional signature for code signing
+ * @param protocolVersion - Protocol version (default "0")
+ * @param manifestString - Optional pre-stringified manifest (used for signed manifests to preserve exact JSON)
  */
 export function createMultipartResponse(
-  manifest: ExpoManifest,
+  manifest: ExpoManifest | null,
   extensions: ManifestExtensions,
   signature?: string,
   protocolVersion: string = "0",
+  manifestString?: string,
 ): Response {
   const boundary = `----ExpoManifestBoundary${crypto.randomUUID().replace(/-/g, "")}`
 
@@ -90,7 +97,8 @@ export function createMultipartResponse(
     body += `expo-signature: ${signature}\r\n`
   }
   body += "\r\n"
-  body += JSON.stringify(manifest)
+  // Use pre-stringified manifest if provided (preserves exact JSON for signature verification)
+  body += manifestString ?? JSON.stringify(manifest)
   body += "\r\n"
 
   // Part 2: Extensions

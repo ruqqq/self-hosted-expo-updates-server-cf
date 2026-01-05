@@ -174,9 +174,9 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   const gitCommit = c.req.header("git-commit")
   const platformHeader = c.req.header("platform")
 
-  // Client-side code signing headers
-  const signedManifestB64 = c.req.header("x-signed-manifest") // Base64-encoded manifest JSON
-  const manifestSignature = c.req.header("x-manifest-signature") // sig="...", keyid="main"
+  // Client-side code signing headers (both are base64-encoded JSON)
+  const signedManifestB64 = c.req.header("x-signed-manifest")
+  const manifestSignatureB64 = c.req.header("x-manifest-signature")
 
   // Validate platform header if provided
   const validPlatforms: UploadPlatform[] = ["ios", "android", "all"]
@@ -201,28 +201,18 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   if (!project) {
     return c.json({ error: `App not found: ${requestedProject}` }, 404)
   }
-  const uploadId = crypto.randomUUID()
-  const r2Path = `updates/${project}/${version}/${uploadId}`
 
-  // Parse multipart form data
+  // Parse multipart form data - collect all files in memory first
   const formData = await c.req.formData()
-
-  // Handle file uploads
-  // Expected format: metadata.json, bundles/*, assets/*
-  const files: UploadedFile[] = []
+  const pendingFiles: { key: string; data: ArrayBuffer }[] = []
   let metadataJson: string | null = null
   let appJson: string | null = null
 
   for (const [key, value] of formData.entries()) {
-    // Check if value is a file (has arrayBuffer method)
     if (typeof value === "object" && value !== null && "arrayBuffer" in value) {
       const file = value as Blob
       const data = await file.arrayBuffer()
-      const filePath = `${r2Path}/${key}`
-
-      // Store in R2
-      await c.env.R2.put(filePath, data)
-      files.push({ path: filePath, data })
+      pendingFiles.push({ key, data })
 
       // Extract metadata
       if (key === "metadata.json") {
@@ -235,12 +225,46 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     }
   }
 
-  // Calculate update ID from metadata hash
-  let updateId = uploadId
-  if (metadataJson) {
+  // Determine updateId - use the ID from signed manifest if available (ensures r2Path matches URLs in manifest)
+  // Otherwise compute from metadata hash
+  let updateId = crypto.randomUUID()
+
+  // If we have a signed manifest, extract the ID from the first platform's manifest
+  if (signedManifestB64) {
+    try {
+      const signedManifestJson = atob(signedManifestB64)
+      const signedManifests = JSON.parse(signedManifestJson) as Record<string, string>
+      // Get the first available platform's manifest and parse it to extract ID
+      const firstPlatformManifest = signedManifests.ios || signedManifests.android
+      if (firstPlatformManifest) {
+        const manifest = JSON.parse(firstPlatformManifest)
+        if (manifest.id) {
+          updateId = manifest.id
+        }
+      }
+    } catch {
+      // Fall back to computing from metadata if parsing fails
+      if (metadataJson) {
+        const metadataBuffer = new TextEncoder().encode(metadataJson)
+        const hash = await hashAsset(metadataBuffer.buffer as ArrayBuffer)
+        updateId = hashToUuid(hash)
+      }
+    }
+  } else if (metadataJson) {
+    // No signed manifest, compute from metadata hash
     const metadataBuffer = new TextEncoder().encode(metadataJson)
     const hash = await hashAsset(metadataBuffer.buffer as ArrayBuffer)
     updateId = hashToUuid(hash)
+  }
+
+  // Now store files at the correct path using updateId
+  const r2Path = `updates/${project}/${version}/${updateId}`
+  const files: UploadedFile[] = []
+
+  for (const { key, data } of pendingFiles) {
+    const filePath = `${r2Path}/${key}`
+    await c.env.R2.put(filePath, data)
+    files.push({ path: filePath, data })
   }
 
   // Pre-compute asset hashes to avoid fetching from R2 on manifest requests
@@ -292,8 +316,9 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     assetsManifest = JSON.stringify(platformManifests)
   }
 
-  // Decode signed manifest if provided
+  // Decode signed manifest and signature if provided (both are base64-encoded JSON)
   let signedManifest: string | null = null
+  let manifestSignature: string | null = null
   if (signedManifestB64) {
     try {
       signedManifest = atob(signedManifestB64)
@@ -301,10 +326,17 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
       return c.json({ error: "Invalid x-signed-manifest: must be base64 encoded" }, 400)
     }
   }
+  if (manifestSignatureB64) {
+    try {
+      manifestSignature = atob(manifestSignatureB64)
+    } catch {
+      return c.json({ error: "Invalid x-manifest-signature: must be base64 encoded" }, 400)
+    }
+  }
 
-  // Create database record
+  // Create database record (use updateId as the primary ID)
   const newUpload: NewUpload = {
-    id: uploadId,
+    id: updateId,
     project,
     version,
     releaseChannel,
@@ -328,7 +360,7 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
 
   return c.json(
     {
-      id: uploadId,
+      id: updateId,
       updateId,
       platform,
       status: "ready",
