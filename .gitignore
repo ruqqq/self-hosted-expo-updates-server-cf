@@ -11,24 +11,18 @@ node_modules
 .AppleDouble
 .LSOverride
 
-# production
-/Web/build
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
 *.log
 
-#Mobile
-node_modules/**/*
-/Mobile/.expo/*
-npm-debug.*
+# Example apps
+ExampleManaged/.expo/
+ExampleEjected/.expo/
+ExampleManaged/node_modules/
+ExampleEjected/node_modules/
 *.orig.*
-
-
-#Builds
-/Builds/*
-!/Builds/.gitkeep
 
 # IDE - WebStorm
 .idea/*

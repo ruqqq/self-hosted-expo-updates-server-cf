@@ -3,6 +3,9 @@ const internalBuildNumber = 23;
 const releaseChannel = 'release';
 const slug = 'examplemanaged';
 
+// Update this to your Cloudflare Worker URL
+const serverUrl = process.env.EXPO_UPDATES_SERVER_URL || 'https://your-worker.your-subdomain.workers.dev';
+
 export default ({ config }) => {
   const configOverrides = {
     slug,
@@ -10,7 +13,7 @@ export default ({ config }) => {
     runtimeVersion: `${version}.${internalBuildNumber}`,
     updates: {
       enabled: true,
-      url: `http://10.0.0.30:3000/api/manifest?project=${slug}&channel=${releaseChannel}`,
+      url: `${serverUrl}/api/manifest?project=${slug}&channel=${releaseChannel}`,
       checkAutomatically: 'ON_ERROR_RECOVERY',
       fallbackToCacheTimeout: 0,
       codeSigningCertificate: "./code-signing/certificate.pem",
