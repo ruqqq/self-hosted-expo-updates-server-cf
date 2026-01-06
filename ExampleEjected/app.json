@@ -13,7 +13,7 @@
     },
     "runtimeVersion": "1.1.1",
     "updates": {
-      "url": "http://10.0.0.30:3000/api/manifest?project=exampleejected&channel=staging",
+      "url": "https://your-worker.your-subdomain.workers.dev/api/manifest?project=exampleejected&channel=staging",
       "enabled": true,
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0,

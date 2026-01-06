@@ -252,7 +252,9 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     }
   } else if (metadataJson) {
     // No signed manifest, compute from metadata hash
-    const metadataBuffer = new TextEncoder().encode(metadataJson)
+    // Include platform in hash to ensure unique IDs for platform-specific uploads
+    const hashInput = `${metadataJson}:${platform}`
+    const metadataBuffer = new TextEncoder().encode(hashInput)
     const hash = await hashAsset(metadataBuffer.buffer as ArrayBuffer)
     updateId = hashToUuid(hash)
   }
