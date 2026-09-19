@@ -174,9 +174,12 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   const gitCommit = c.req.header("git-commit")
   const platformHeader = c.req.header("platform")
 
-  // Client-side code signing headers (both are base64-encoded JSON)
-  const signedManifestB64 = c.req.header("x-signed-manifest")
-  const manifestSignatureB64 = c.req.header("x-manifest-signature")
+  // Client-side code signing inputs (both base64-encoded JSON). They may arrive as headers, but
+  // a signed manifest grows with the asset count and Cloudflare caps request headers at 32 KB,
+  // so the publish script sends them as multipart fields; the header form is kept for older
+  // scripts.
+  let signedManifestB64 = c.req.header("x-signed-manifest")
+  let manifestSignatureB64 = c.req.header("x-manifest-signature")
 
   // Validate platform header if provided
   const validPlatforms: UploadPlatform[] = ["ios", "android", "all"]
@@ -209,6 +212,11 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   let appJson: string | null = null
 
   for (const [key, value] of formData.entries()) {
+    if (typeof value === "string") {
+      if (key === "x-signed-manifest") signedManifestB64 = value
+      if (key === "x-manifest-signature") manifestSignatureB64 = value
+      continue
+    }
     if (typeof value === "object" && value !== null && "arrayBuffer" in value) {
       const file = value as Blob
       const data = await file.arrayBuffer()
