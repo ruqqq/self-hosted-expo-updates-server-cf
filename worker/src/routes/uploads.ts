@@ -236,6 +236,11 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   // Determine updateId - use the ID from signed manifest if available (ensures r2Path matches URLs in manifest)
   // Otherwise compute from metadata hash
   let updateId = crypto.randomUUID()
+  // A signed manifest's asset URLs are fixed by the signature, so the files must be stored at
+  // the path those URLs name. The publish script builds that path from the app.json slug, which
+  // need not match the case of the registered app id, so it is read back from the manifest
+  // rather than rebuilt here.
+  let signedR2Path: string | null = null
 
   // If we have a signed manifest, extract the ID from the first platform's manifest
   if (signedManifestB64) {
@@ -248,6 +253,12 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
         const manifest = JSON.parse(firstPlatformManifest)
         if (manifest.id) {
           updateId = manifest.id
+        }
+        const launchUrl = manifest.launchAsset?.url
+        const assetKey = launchUrl ? new URL(launchUrl).searchParams.get("asset") : null
+        const marker = `/${updateId}/`
+        if (assetKey && assetKey.includes(marker)) {
+          signedR2Path = assetKey.slice(0, assetKey.indexOf(marker) + marker.length - 1)
         }
       }
     } catch {
@@ -266,7 +277,7 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
   }
 
   // Now store files at the correct path using updateId
-  const r2Path = `updates/${project}/${version}/${updateId}`
+  const r2Path = signedR2Path ?? `updates/${project}/${version}/${updateId}`
   const files: UploadedFile[] = []
 
   for (const { key, data } of pendingFiles) {
@@ -342,9 +353,12 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
     }
   }
 
-  // Create database record (use updateId as the primary ID)
+  // Create database record. The row gets its own id: updateId is derived from the export, so
+  // the same commit published to two channels shares it (and its R2 path — deleting one row
+  // removes the files both point at; re-publishing puts them back).
+  const rowId = crypto.randomUUID()
   const newUpload: NewUpload = {
-    id: updateId,
+    id: rowId,
     project,
     version,
     releaseChannel,
@@ -368,7 +382,7 @@ uploadsRouter.post("/", uploadKeyMiddleware, async (c) => {
 
   return c.json(
     {
-      id: updateId,
+      id: rowId,
       updateId,
       platform,
       status: "ready",
