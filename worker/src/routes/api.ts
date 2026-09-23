@@ -46,6 +46,22 @@ api.get("/manifest", async (c) => {
   return handleManifest(c)
 })
 
+/**
+ * "No update" for the expo-updates protocol: 204 No Content. A 404 here makes
+ * the client treat the check as a failed request (apps then show an update
+ * error) whenever a runtime version or channel has nothing released yet.
+ */
+function noUpdateAvailable() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "expo-protocol-version": "1",
+      "expo-sfv-version": "0",
+      "cache-control": "private, max-age=0",
+    },
+  })
+}
+
 async function handleManifest(
   c: Context<{ Bindings: Env }>,
   pathProject?: string,
@@ -72,7 +88,7 @@ async function handleManifest(
   // 2. Resolve actual app ID (case-insensitive lookup)
   const project = await resolveAppId(db, requestedProject)
   if (!project) {
-    return c.json({ message: "No updates available" }, 404)
+    return noUpdateAvailable()
   }
 
   // 3. Track client device (async, don't block response)
@@ -99,7 +115,7 @@ async function handleManifest(
 
   // 5. No update found
   if (!update) {
-    return c.json({ message: "No updates available" }, 404)
+    return noUpdateAvailable()
   }
 
   let manifest: ExpoManifest | null = null
