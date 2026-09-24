@@ -7,10 +7,11 @@
 import { Hono } from "hono"
 import { jwt } from "hono/jwt"
 import { drizzle } from "drizzle-orm/d1"
-import { eq, and, ne } from "drizzle-orm"
+import { eq, and, ne, inArray } from "drizzle-orm"
 
 import type { Env } from "../types"
 import { uploads } from "../db/schema"
+import { replacedPlatforms } from "../services/release"
 
 const utilsRouter = new Hono<{ Bindings: Env }>()
 
@@ -49,7 +50,8 @@ utilsRouter.post("/release", async (c) => {
     return c.json({ error: "Upload is already released" }, 400)
   }
 
-  // Mark previous releases for this project/version/channel as obsolete
+  // Mark previous releases for this project/version/channel/platform as obsolete.
+  // Platform matters: iOS and Android can share a runtime version.
   await db
     .update(uploads)
     .set({ status: "obsolete", updatedAt: new Date() })
@@ -58,6 +60,7 @@ utilsRouter.post("/release", async (c) => {
         eq(uploads.project, upload.project),
         eq(uploads.version, upload.version),
         eq(uploads.releaseChannel, upload.releaseChannel),
+        inArray(uploads.platform, replacedPlatforms(upload.platform)),
         eq(uploads.status, "released"),
         ne(uploads.id, uploadId),
       ),
@@ -103,7 +106,7 @@ utilsRouter.post("/rollback", async (c) => {
     return c.json({ error: "Upload not found" }, 404)
   }
 
-  // Mark current release as obsolete
+  // Mark the current release for this platform as obsolete
   await db
     .update(uploads)
     .set({ status: "obsolete", updatedAt: new Date() })
@@ -112,6 +115,7 @@ utilsRouter.post("/rollback", async (c) => {
         eq(uploads.project, upload.project),
         eq(uploads.version, upload.version),
         eq(uploads.releaseChannel, upload.releaseChannel),
+        inArray(uploads.platform, replacedPlatforms(upload.platform)),
         eq(uploads.status, "released"),
       ),
     )
