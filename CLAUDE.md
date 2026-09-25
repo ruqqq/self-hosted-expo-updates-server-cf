@@ -4,308 +4,275 @@ This file provides guidance for AI assistants working with this codebase.
 
 ## Project Overview
 
-Self Hosted Expo Updates Server is a complete solution for managing Expo OTA (Over-The-Air) updates. It allows developers to self-host their own update server with a web dashboard for managing updates, rollbacks, and monitoring client downloads.
+Self Hosted Expo Updates Server is a complete solution for managing Expo OTA (Over-The-Air) updates, running on Cloudflare Workers with D1 (SQLite) and R2 (Object Storage).
 
 **Key Features:**
 - Manage multiple Expo apps
 - Support for multiple runtime versions and release channels
+- Platform-specific updates (iOS-only, Android-only, or both)
 - Secure update publishing with code signing
 - Rollback capability
-- Real-time client update monitoring
+- Client device tracking and analytics
 - Self-signed certificate generation
+- Edge deployment via Cloudflare's global network
 
 ## Architecture
 
-The project consists of three main components:
-
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Web (React)   │────▶│  API (Node.js)  │────▶│    MongoDB      │
-│   Port 4000     │     │   Port 3000     │     │   Port 27017    │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ▼
-                        ┌─────────────────┐
-                        │  File Storage   │
-                        │ /updates        │
-                        │ /uploads        │
-                        └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Cloudflare Workers                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │   Hono Router   │  │  HTML Dashboard │  │   API       │  │
+│  │   (src/index)   │  │  (dashboard/)   │  │  (routes/)  │  │
+│  └────────┬────────┘  └─────────────────┘  └──────┬──────┘  │
+│           │                                        │         │
+│  ┌────────▼────────┐                     ┌────────▼────────┐│
+│  │   D1 Database   │                     │   R2 Storage    ││
+│  │   (SQLite)      │                     │   (Assets)      ││
+│  └─────────────────┘                     └─────────────────┘│
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### API Server (FeathersJS + Express)
-- **Framework**: FeathersJS v4 on Express
-- **Entry point**: `API/src/index.js`
-- **Configuration**: `API/config/` (uses node-config)
-- **Database**: MongoDB v4.2.2
-
-### Web Dashboard (React + Vite)
-- **Framework**: React 17 with Vite
-- **Entry point**: `Web/src/index.jsx`
-- **State management**: react-capsule + react-query
-- **UI Library**: PrimeReact with Font Awesome icons
-- **Routing**: React Router v6
+### Tech Stack
+- **Runtime**: Cloudflare Workers (Edge)
+- **Framework**: Hono (TypeScript)
+- **Database**: D1 (SQLite) with Drizzle ORM
+- **Storage**: R2 (S3-compatible object storage)
+- **Dashboard**: Server-rendered HTML with htm.js
+- **Authentication**: JWT tokens
 
 ## Directory Structure
 
 ```
-├── API/                      # Backend server
-│   ├── config/               # Configuration files (node-config)
-│   │   ├── default.json      # Default settings
-│   │   ├── production.json   # Production overrides
-│   │   └── custom-environment-variables.json  # Env var mapping
-│   ├── public/               # Static files + publish script
+├── worker/                   # Cloudflare Worker implementation
 │   ├── src/
-│   │   ├── hooks/            # FeathersJS hooks
-│   │   │   ├── app.js        # Application-level hooks
-│   │   │   ├── error.js      # Error handling hooks
-│   │   │   └── security.js   # Authentication/authorization hooks
-│   │   ├── modules/          # Core modules
-│   │   │   ├── expo/         # Expo-specific logic
-│   │   │   │   ├── asset.js  # Asset handling
-│   │   │   │   ├── certs.js  # Certificate generation
-│   │   │   │   ├── helpers.js # Utility functions
-│   │   │   │   ├── manifest.js # Manifest generation
-│   │   │   │   └── request.js # Request parsing
-│   │   │   ├── channels.js   # Socket.io channels
-│   │   │   ├── express.config.js
-│   │   │   ├── feathers.config.js
-│   │   │   ├── logger.js     # Pino logger
-│   │   │   └── mongodb.js    # Database connection
-│   │   ├── services/         # API endpoints
-│   │   │   ├── api.js        # Main Expo API (manifest/assets)
-│   │   │   ├── apps.js       # App management
-│   │   │   ├── authentication.js
-│   │   │   ├── clients.js    # Client device tracking
-│   │   │   ├── messages.js   # Real-time messaging
-│   │   │   ├── stats.js      # Statistics
-│   │   │   ├── status.js     # Server status
-│   │   │   ├── upload.js     # File upload handling
-│   │   │   ├── uploads.js    # Upload records
-│   │   │   └── users.js      # User management
-│   │   └── index.js          # Server entry point
-│   └── Dockerfile
-│
-├── Web/                      # Frontend dashboard
-│   ├── deploy/               # Nginx and deployment configs
-│   ├── public/               # Static assets
-│   ├── src/
-│   │   ├── Components/       # Reusable UI components
-│   │   │   ├── Common/       # Button, Card, Input, etc.
-│   │   │   └── Layout/       # TopMenu, Background, etc.
-│   │   ├── Pages/            # Route components
-│   │   │   ├── App/          # App detail pages
-│   │   │   ├── Home/         # Dashboard home
-│   │   │   ├── Login.jsx
-│   │   │   └── NewApp.jsx
-│   │   ├── Services/         # API client
-│   │   │   ├── FeathersClient.js  # Socket.io client
-│   │   │   └── QueryCache.js      # React Query config
-│   │   ├── State/            # State management
-│   │   └── index.jsx         # App entry point
-│   ├── vite.config.js
-│   └── Dockerfile
-│
-├── Docker/                   # Docker compose files
-│   ├── development/          # Dev environment
-│   └── production/           # Production setup
+│   │   ├── index.ts          # Worker entry point (Hono app)
+│   │   ├── types.ts          # TypeScript type definitions
+│   │   ├── db/
+│   │   │   └── schema.ts     # Drizzle ORM schema
+│   │   ├── routes/
+│   │   │   ├── api.ts        # Expo manifest/assets endpoints
+│   │   │   ├── auth.ts       # Authentication routes
+│   │   │   ├── apps.ts       # App CRUD operations
+│   │   │   ├── uploads.ts    # Upload management
+│   │   │   ├── clients.ts    # Client device tracking
+│   │   │   ├── stats.ts      # Statistics endpoints
+│   │   │   └── utils.ts      # Utility routes
+│   │   ├── services/
+│   │   │   ├── manifest.ts   # Manifest generation logic
+│   │   │   ├── helpers.ts    # Helper utilities
+│   │   │   └── md5.ts        # MD5 hashing
+│   │   └── middleware/
+│   │       └── auth.ts       # JWT authentication middleware
+│   ├── dashboard/            # HTML dashboard (htm.js)
+│   │   ├── index.html        # Main HTML template
+│   │   ├── app.js            # Dashboard app initialization
+│   │   ├── api.js            # Dashboard API client
+│   │   ├── pages/            # Page components
+│   │   └── components/       # Reusable UI components
+│   ├── migrations/           # D1 database migrations (Drizzle)
+│   ├── scripts/
+│   │   └── e2e-test.sh       # End-to-end test suite
+│   ├── wrangler.sample.toml  # Example Wrangler config
+│   ├── drizzle.config.ts     # Drizzle ORM config
+│   ├── package.json
+│   └── tsconfig.json
 │
 ├── ExampleEjected/           # Example ejected Expo app
 ├── ExampleManaged/           # Example managed Expo app
-└── Builds/                   # Build artifacts (gitignored)
+├── package.json              # Root package.json (scripts proxy to worker)
+└── README.md                 # Main documentation
 ```
 
 ## Development Workflow
 
 ### Quick Start
+
 ```bash
-# Install root dependencies
-yarn
+# Install dependencies
+cd worker
+npm install
 
-# Start development environment (API + Web + MongoDB)
-yarn dev:run
+# Copy and configure wrangler.toml
+cp wrangler.sample.toml wrangler.toml
+# Edit wrangler.toml with your D1 database_id
 
-# Stop development environment
-yarn dev:stop
+# Set up local environment
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your secrets
+
+# Apply database migrations locally
+npm run db:migrate:local
+
+# Start dev server
+npm run dev
 ```
 
-This starts:
-- API server at `http://localhost:3000`
-- Web dashboard at `http://localhost:4000`
-- MongoDB at `localhost:27017`
+Visit `http://localhost:3000` to access the dashboard.
 
-**Default credentials**: admin / devserver
+**Default credentials**: admin / (your ADMIN_PASSWORD from .dev.vars)
 
-### Running Individual Components
+### Running Tests
 
-**API Server (with hot reload):**
 ```bash
-cd API
-yarn
-yarn start  # Uses nodemon with --inspect
-```
+# Unit tests
+npm test
 
-**Web Dashboard:**
-```bash
-cd Web
-yarn
-yarn start  # Vite dev server on port 4000
+# E2E tests (requires running dev server)
+UPLOAD_KEY=your-key npm run test:e2e
 ```
 
 ## Key Conventions
 
 ### Code Style
+- **Language**: TypeScript
 - **Indentation**: 2 spaces
-- **Line endings**: LF (Unix)
-- **Linting**: StandardJS
-- **Trailing commas**: Avoided
-- **Semicolons**: Required in API, optional in Web
+- **Linting**: oxlint
+- **Formatting**: oxfmt (Prettier-compatible)
+- **Type checking**: tsgo (fast TypeScript checker)
 
-### API Service Pattern
+### Route Pattern
 
-Services in `API/src/services/` follow this pattern:
+Routes in `worker/src/routes/` follow this pattern:
 
-```javascript
-const s = require('../hooks/security')
+```typescript
+import { Hono } from 'hono';
+import { authMiddleware } from '../middleware/auth';
 
-module.exports = {
-  name: 'serviceName',         // URL path: /serviceName
-  noBsonIDs: false,            // Use string IDs instead of ObjectId
-  createService: null,         // Custom service class (optional)
-  middleware: null,            // Express middleware (optional)
-  hooks: {
-    before: {
-      all: s.defaultSecurity(), // JWT auth by default
-      find: [],
-      get: [],
-      create: [],
-      update: [],
-      patch: [],
-      remove: []
-    },
-    after: { /* ... */ }
-  }
-}
+const app = new Hono<{ Bindings: Env }>();
+
+// Public endpoint
+app.get('/public', async (c) => {
+  return c.json({ data: 'public' });
+});
+
+// Protected endpoint
+app.get('/protected', authMiddleware, async (c) => {
+  const user = c.get('user');
+  return c.json({ data: 'protected', user });
+});
+
+export default app;
 ```
 
-### Security Hooks
-- `s.defaultSecurity()` - JWT authentication + prevent global updates
-- `s.methodNotAllowed` - Block specific HTTP methods
-- `s.preventGlobalUpdates` - Require entity ID for updates/patches/deletes
+### Database Operations
 
-### React Component Structure
+Uses Drizzle ORM with D1:
 
-Components use functional style with hooks:
-```jsx
-import React from 'react'
-import { useQuery } from 'react-query'
-import { FC } from '../Services'
+```typescript
+import { drizzle } from 'drizzle-orm/d1';
+import { apps } from '../db/schema';
 
-function MyComponent() {
-  const { data } = useQuery('key', () => FC.service('endpoint').find())
-  return <div>{/* ... */}</div>
-}
+const db = drizzle(c.env.DB);
+const allApps = await db.select().from(apps);
 ```
 
 ## Environment Variables
 
-### API Server
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MONGO_CONN` | MongoDB connection string | Required |
-| `FEATHERS_AUTH_SECRET` | JWT signing secret | Required |
-| `ADMIN_PASSWORD` | Initial admin password | `admin` |
-| `UPLOAD_KEY` | Key for publish script auth | Required |
-| `PUBLIC_URL` | Public server URL | `http://localhost:3000` |
-| `DASBHOARD_THROTTLE_MSEC` | Dashboard refresh throttle | `5000` |
-| `NODE_ENV` | Environment mode | `development` |
-| `TZ` | Timezone | `Europe/Rome` |
+### Development (.dev.vars)
 
-### Web Dashboard
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `API_BASE_URL` | Backend API URL | `http://localhost:3000` |
-| `ENVIRONMENT` | Environment name | `development` |
+```bash
+JWT_SECRET=your-jwt-secret        # openssl rand -base64 32
+UPLOAD_KEY=your-upload-key        # openssl rand -hex 16
+ADMIN_PASSWORD=your-admin-password
+```
+
+### Production
+
+Set via `wrangler secret put`:
+
+```bash
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put UPLOAD_KEY
+npx wrangler secret put ADMIN_PASSWORD
+```
+
+### wrangler.toml Configuration
+
+```toml
+[vars]
+PUBLIC_URL = "https://your-worker.workers.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "expo-updates"
+database_id = "your-database-id"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "expo-updates"
+```
 
 ## API Endpoints
 
 ### Public Endpoints (No Auth)
-- `GET /api/manifest` - Fetch update manifest (Expo client)
-- `GET /api/assets` - Fetch update assets (Expo client)
-- `GET /status` - Server health check
+- `GET /status` - Health check
+- `GET /api/manifest` - Expo update manifest
+- `GET /api/assets` - Asset files from R2
 
-### Authenticated Endpoints
-- `/apps` - CRUD for managed applications
-- `/uploads` - Upload records management
-- `/upload` - File upload (multipart, requires upload-key header)
-- `/clients` - Client device tracking
-- `/stats` - Usage statistics
-- `/users` - User management
-- `/authentication` - Login/logout
+### Protected Endpoints (JWT Required)
+- `GET/POST /apps` - List/create apps
+- `GET/PATCH/DELETE /apps/:id` - Manage app
+- `GET /uploads` - List uploads
+- `GET/PATCH/DELETE /uploads/:id` - Manage upload
+- `GET /clients` - List client devices
+- `GET /stats/:project` - Project statistics
+- `POST /utils/release` - Release an upload
+- `POST /utils/rollback` - Rollback to previous
+- `POST /utils/generate-certificate` - Generate signing keys
 
-## Docker Deployment
-
-### Development
-```bash
-cd Docker/development
-docker-compose up --build
-```
-
-### Production
-1. Copy `Docker/production/` to your server
-2. Edit `docker-compose.yml`:
-   - Set `FEATHERS_AUTH_SECRET`
-   - Set `ADMIN_PASSWORD`
-   - Set `UPLOAD_KEY`
-   - Set `PUBLIC_URL` to your domain
-   - Set MongoDB credentials in `mongoinit/init.js`
-3. Run `docker-compose up -d`
-
-## Publishing Updates
-
-Use the provided script or create your own:
-
-```bash
-# Download script from server
-curl -o publish.sh http://your-server:3000/expo-publish-selfhosted.sh
-
-# Publish an update
-./publish.sh <release-channel> <app-path> <upload-key> <server-url>
-
-# Example
-./publish.sh staging ./MyApp abc123 https://updates.example.com
-```
-
-The script:
-1. Runs `expo export` to generate update bundle
-2. Adds `app.json` and `package.json` to the bundle
-3. Zips the bundle
-4. POSTs to `/upload` with required headers
-
-## Testing
-
-No automated test suite is currently configured. Manual testing through the web dashboard or API clients.
+### Upload Endpoint (Upload Key Required)
+- `POST /upload` - Upload new update bundle
 
 ## Common Tasks
 
-### Adding a New API Service
-1. Create `API/src/services/newservice.js`
-2. Export with `name`, `hooks`, and optionally `createService`
-3. Service auto-registers on startup
+### Adding a New Route
 
-### Adding a New Web Page
-1. Create component in `Web/src/Pages/`
-2. Add route in `Web/src/index.jsx`
-3. Optionally add to `Web/src/Components/Layout/MenuItems.js`
+1. Create `worker/src/routes/newroute.ts`
+2. Export a Hono app with your routes
+3. Import and mount in `worker/src/index.ts`
 
-### Modifying Database Schema
-No migrations - MongoDB is schema-less. Update service hooks for validation.
+### Database Schema Changes
+
+1. Modify `worker/src/db/schema.ts`
+2. Generate migration: `npm run db:generate`
+3. Apply migration: `npm run db:migrate`
+
+### Deployment
+
+```bash
+cd worker
+npm run deploy
+```
+
+## Tooling
+
+| Tool | Purpose | Command |
+|------|---------|---------|
+| [tsgo](https://devblogs.microsoft.com/typescript/announcing-typescript-native-previews/) | Type checking | `npm run typecheck` |
+| [oxlint](https://oxc.rs/) | Linting | `npm run lint` |
+| [oxfmt](https://oxc.rs/docs/guide/usage/formatter) | Formatting | `npm run format` |
+| [Drizzle](https://orm.drizzle.team/) | ORM & migrations | `npm run db:*` |
+| [Vitest](https://vitest.dev/) | Unit testing | `npm test` |
+| [Wrangler](https://developers.cloudflare.com/workers/wrangler/) | CF deployment | `npm run dev/deploy` |
 
 ## Troubleshooting
 
-### Admin User Not Created
-Restart API container after MongoDB is fully initialized:
+### "Database not found"
 ```bash
-docker-compose restart api
+npx wrangler d1 create expo-updates
+# Update wrangler.toml with the database_id
+```
+
+### "R2 bucket not found"
+```bash
+npx wrangler r2 bucket create expo-updates
+```
+
+### Local database reset
+```bash
+rm -rf worker/.wrangler/state
+npm run db:migrate:local
 ```
 
 ### Certificate Issues During Development
@@ -313,6 +280,3 @@ For Expo SDK >= 49, start dev server with:
 ```bash
 npx expo start --private-key-path path/to/key.pem
 ```
-
-### WebSocket Connection Fails
-Check that `API_BASE_URL` in Web matches the accessible API server URL.

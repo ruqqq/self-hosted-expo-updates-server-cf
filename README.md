@@ -1,137 +1,247 @@
 <h2 align="center">Self Hosted Expo Updates Server</h2>
 
-# Intro
-Self Hosted Expo Update Server is a ready to use **_batteries included_** Expo updates compliant  server to manage updates that you can host yourself in the cloud and have full control and visibility on the update cycle, including rollbacks!
+<p align="center">
+  <b>Cloudflare Workers Edition</b><br>
+  A self-hosted OTA update server for Expo apps, running on the edge.
+</p>
 
-I love the ability to push over-the-air updates with expo, it is a fantastic feature, but with great power comes great responsibility.
-The console-only interface can be tricky, the risk of making mistakes is high (especially on ejected app with incompatible binaries), if you want to roll back you really need to know what you are doing, and a single mistake can have potentially devastating impact.
+---
 
-I have already made a simple helper library that I use in my expo projects to simplify the update setup on the mobile side, check out [expo-custom-updater](https://github.com/umbertoghio/expo-custom-updater)
+## Introduction
 
-This is my attempt to simplify my own life when dealing with updates on the server side, and hopefully it can be useful to you too!
+Self Hosted Expo Updates Server is a **batteries-included** solution for managing Expo OTA (Over-The-Air) updates that runs entirely on Cloudflare Workers. Deploy globally on the edge with D1 (SQLite) for data storage and R2 for asset storage.
 
-Features:
-* Manage multiple Expo Apps
-* Manage multiple Versions and Release Channels
-* Send expo updates securely to the server and decide later when / how to release to users
-* Roll back to a previous update
-* Get insight on how many client app downloaded the update, see your changes being released in realtime
-* Get a ton of info on the update, including git branch, commit, package.json and app.json information
-* Assisted app configuration with self-signed certificate generator.
-* All from a simple Web interface
+**Why self-host your updates?**
+- Full control over your update cycle
+- Web dashboard for easy management
+- Rollback capability with one click
+- Real-time client tracking
+- No vendor lock-in
 
-Monitor client updates in realtime
+## Features
 
-![ezgif com-gif-maker (1)](https://user-images.githubusercontent.com/25666241/188273081-d55da67d-0906-4348-bc0c-714286e8e812.gif)
+- ✅ Manage multiple Expo apps
+- ✅ Multiple runtime versions and release channels
+- ✅ Platform-specific updates (iOS-only, Android-only, or both)
+- ✅ Secure code signing with RSA-SHA256
+- ✅ One-click rollback to previous versions
+- ✅ Real-time client update tracking
+- ✅ Self-signed certificate generation
+- ✅ Edge deployment (200+ locations worldwide)
+- ✅ Free tier friendly (Cloudflare Workers)
 
-A lot of useful information on every update
-![image](https://user-images.githubusercontent.com/25666241/187002164-56841c80-27f1-4055-9fa2-f1efd6fe3cf7.png)
+## Quick Start
 
-Details on dependencies to avoid incompatible updates
-![image](https://user-images.githubusercontent.com/25666241/187002193-ee179043-545e-4c71-ba3d-762447688c27.png)
+### Prerequisites
 
-Roll Back to a previous update
-![image](https://user-images.githubusercontent.com/25666241/187002214-eaaf68bf-9d17-44b8-afc9-dd27a0f861e0.png)
+- Node.js >= 18.0.0
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
+- Cloudflare account (free tier works!)
 
-# Install / Setup
+### Installation
 
-## Play around in Dev
-If you have Docker installed you clone this project you and play around by running `yarn` in the root folder and then running `yarn dev:run` to start the Docker/development docker compose. Web credentials are admin/devserver (admin password is set in the docker-compose file). 
+```bash
+# Clone the repository
+git clone https://github.com/ruqqq/self-hosted-expo-updates-server-cf.git
+cd self-hosted-expo-updates-server-cf
 
-## Deploy on your server
-If you use Docker you can find a production-ready docker-compose files under the Docker folder, just copy Docker/production on your server, set your secrets / credentials and you are ready to go. The two docker images are public and ready to go.
-Explanation for the Environment settings is in the docker-compose file. For production reverse proxy with Apache take a look at **README DOCKER.md**  
+# Install dependencies
+cd worker
+npm install
 
-Otherwise you can build from code, there's a NodeJS API server under the API folder and a React / Vite web project under the Web foder.
+# Create Cloudflare resources
+npx wrangler d1 create expo-updates
+npx wrangler r2 bucket create expo-updates
 
-## Add your app
-Use the web interface to add your application, just enter the expo slug name
-![image](https://user-images.githubusercontent.com/25666241/187029334-a1748a96-97e1-4efc-af70-631cea61a152.png)
+# Copy and configure wrangler.toml
+cp wrangler.sample.toml wrangler.toml
+# Edit wrangler.toml and add your database_id from the create command
 
+# Set secrets
+npx wrangler secret put JWT_SECRET    # Generate: openssl rand -base64 32
+npx wrangler secret put UPLOAD_KEY    # Generate: openssl rand -hex 16
+npx wrangler secret put ADMIN_PASSWORD
 
-## Setup a script to publish updates
-You can download the ready to use publish script or create your own, the script logic is simple: 
-- use `expo export` to generate an update
-- Add app.json and package.json to the build folder
-- Zip the build folder
-- use curl to push the zip file to the server
+# Apply database migrations
+npm run db:migrate
 
-![image](https://user-images.githubusercontent.com/25666241/187029353-9fb6dfe9-913d-4537-900f-673cf7d8e886.png)
-
-## Generate Self Signed certificate and private key
-In order to validate the update expo needs a certificate.pem inside your app and a private key on the update server.
-Use the SERVER CONFIGURATION section to generate a new self-signed key, make sure to SAVE, then downlaod both key and back them up!
-![image](https://user-images.githubusercontent.com/25666241/187003070-c348189d-b159-4cfd-9f03-3801ea7e9b40.png)
-
-## Configure your app
-It is necessary to configure your app.json with the provided keys from the APP CONFIGURATION section.
-Make sure to have a runtime version specified.
-
-If you are on an Ejected project you can run `expo prebuild` to autogenerate the code in android-manifest.xml and Expo.plist, otherwise use the provided settings in the APP CONFIGURATION with the autogenerated code.
-
-## Build a new app
-Updates don't work in dev / expo app, you need to build a new app to test the system. You can use the provided examples (Managed and Ejected) in the relative folders. The provided example app have a button to request and download an update if present, and another button to reload the app.
-It is expected that an app will automatically do this operation on start, check out [expo-custom-updater](https://github.com/umbertoghio/expo-custom-updater)
-
-IMPORTANT:
-During development you may get certificate issues when loading the JS bundle from your computer, there are two options:
-
-On EXPO >= 49: you can now start the development server specifying your private signing key using the following command: 
-```
-npx expo start --private-key-path (path to the private key)
-```
-(Thanks @SMhdAsadi )
-
-Alternatively you may allow unsigned manifests by editing Expo.plist and AndroidManifest.xml:
-
-AndroidManifest.xml
-```
-    <meta-data android:name="expo.modules.updates.CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS" android:value="true"/>
+# Deploy!
+npm run deploy
 ```
 
-Expo.plist
+### Local Development
+
+```bash
+# Set up local environment
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars with your secrets
+
+# Apply migrations locally
+npm run db:migrate:local
+
+# Start dev server
+npm run dev
 ```
-<key>EXUpdatesConfigCodeSigningAllowUnsignedManifests</key>
-<true/>
+
+Visit `http://localhost:3000` - Login with **admin** / your ADMIN_PASSWORD.
+
+## Usage
+
+### 1. Add Your App
+
+Use the web dashboard to add your application by entering the Expo slug name.
+
+### 2. Configure Your Expo App
+
+Update your `app.config.js`:
+
+```javascript
+const slug = 'my-app';
+const serverUrl = 'https://your-worker.workers.dev';
+const releaseChannel = process.env.RELEASE_CHANNEL || 'production';
+
+export default ({ config }) => ({
+  ...config,
+  slug,
+  runtimeVersion: '1.0.0',
+  updates: {
+    enabled: true,
+    url: `${serverUrl}/api/manifest?project=${slug}&channel=${releaseChannel}`,
+    checkAutomatically: 'ON_LOAD',
+    fallbackToCacheTimeout: 30000,
+  },
+});
 ```
-Remember to set those back to false before staging / production build!.
 
-Once the app pings the update server you will see an update appearing in the homepage, and after an update / download / reload cycle the updated app will reflect in the dashboar AFTER it asks for an update again.
+### 3. Set Up Code Signing (Recommended)
 
-![ezgif com-gif-maker (1)](https://user-images.githubusercontent.com/25666241/188273081-d55da67d-0906-4348-bc0c-714286e8e812.gif)
+1. Generate a certificate in the dashboard (Server Configuration → Generate Certificate)
+2. Download `certificate.pem` and save to your project as `code-signing/certificate.pem`
+3. Update your app config:
 
+```javascript
+updates: {
+  // ... other config
+  codeSigningCertificate: './code-signing/certificate.pem',
+  codeSigningMetadata: {
+    keyid: 'main',
+    alg: 'rsa-v1_5-sha256',
+  },
+},
+```
 
-## Publish and release an update
-This part should be the simplest: call the provided script with appropiate parameters and see your update pop in the web UI.
-Release, rollback or delete the updates and see the clients updating in the homepage.
+### 4. Publish Updates
 
-## Monitor the update being downloaded by your client in realtime
-Configure the throttle value in docker-compose Environment in order to slow down updates (in case you have thousands of users) to avoid overloads.
-Default throttle is no more than one dashboard update every 5 seconds.
+Download the publish script from the dashboard, or use curl:
 
-![image](https://user-images.githubusercontent.com/25666241/187808147-1c6fac7c-cc95-4fcf-a736-f059b00f83ef.png)
+```bash
+# Export your app
+npx expo export --output-dir dist
 
-# Example Apps
-## ExampleManaged
+# Upload to server
+curl -X POST "https://your-worker.workers.dev/upload" \
+  -H "project: my-app" \
+  -H "version: 1.0.0" \
+  -H "release-channel: production" \
+  -H "upload-key: your-upload-key" \
+  -F "metadata.json=@dist/metadata.json" \
+  -F "app.json=@app.json" \
+  -F "bundles/ios.js=@dist/bundles/ios-*.js" \
+  -F "bundles/android.js=@dist/bundles/android-*.js"
+```
 
-You will find an example app in the Example Managed folder, to start tweaking it up you need:
- 
-- Copy App public certificate from server to **/code-signing/certificate.pem**
-- Teweak app.json and app.config.js, specially the updates section to point to the right server
-- Create an Android or iOS build using the respective scripts in package.json
-- Install and test the app
-- Make some changes in the app code in App.js
-- Publish an update with `scripts/expo-publish-selfhosted.sh staging ./ExampleManaged abc123def456 http://localhost:3000`
-- Test the update within the app
+### 5. Release & Manage
 
-## Production console log in Android
+Use the web dashboard to:
+- **Release** - Make an upload available to clients
+- **Rollback** - Revert to a previous version
+- **Monitor** - Track client downloads in real-time
 
-You can see tailored console output using ADB logcat like this:
+## API Reference
 
-- View only RN and Expo updates output `adb logcat "*:S" ReactNative:V ReactNativeJS:V FirebaseMessaging:V dev.expo.updates:V`
-- Clear logs `adb logcat -c`
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/status` | GET | - | Health check |
+| `/api/manifest` | GET | - | Expo update manifest |
+| `/api/assets` | GET | - | Asset files |
+| `/authentication` | POST | - | Login (returns JWT) |
+| `/apps` | GET/POST | JWT | List/create apps |
+| `/apps/:id` | GET/PATCH/DELETE | JWT | Manage app |
+| `/uploads` | GET | JWT | List uploads |
+| `/uploads/:id` | GET/PATCH/DELETE | JWT | Manage upload |
+| `/upload` | POST | Upload Key | Upload new bundle |
+| `/utils/release` | POST | JWT | Release an upload |
+| `/utils/rollback` | POST | JWT | Rollback to previous |
 
-# Contribute
-Feel free to clone, costomize and send back PRs!
+## Cost Considerations
 
-Have fun!
+| Resource | Free Tier | Typical Cost |
+|----------|-----------|--------------|
+| Workers | 100K req/day | Usually free |
+| D1 | 5M reads/day, 100K writes | Usually free |
+| R2 | 10GB storage, 10M ops/month | Low |
+
+Most small-medium deployments fit within the free tier.
+
+## Example Apps
+
+The `ExampleManaged/` and `ExampleEjected/` directories contain sample Expo apps pre-configured to use this update server. Update the server URL in their config files to test.
+
+## Development
+
+```bash
+cd worker
+
+# Run dev server
+npm run dev
+
+# Run tests
+npm test
+
+# Run E2E tests
+UPLOAD_KEY=your-key npm run test:e2e
+
+# Type check
+npm run typecheck
+
+# Lint & format
+npm run lint
+npm run format
+
+# Deploy
+npm run deploy
+```
+
+## Troubleshooting
+
+### Certificate Issues During Development
+
+For Expo SDK >= 49, start the dev server with your private key:
+
+```bash
+npx expo start --private-key-path path/to/private-key.pem
+```
+
+Or allow unsigned manifests in development (AndroidManifest.xml / Expo.plist):
+
+```xml
+<meta-data android:name="expo.modules.updates.CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS" android:value="true"/>
+```
+
+### No Updates Available (404)
+
+1. Check that `project` query param matches your app slug
+2. Verify there's a `released` upload for your runtime version and channel
+3. Check the `/uploads` endpoint to see upload statuses
+
+## Contributing
+
+Feel free to fork, customize, and send back PRs!
+
+## License
+
+MIT
+
+---
+
+*Originally forked from [umbertoghio/self-hosted-expo-updates-server](https://github.com/umbertoghio/self-hosted-expo-updates-server), rewritten for Cloudflare Workers.*

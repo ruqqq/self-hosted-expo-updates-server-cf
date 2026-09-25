@@ -250,35 +250,10 @@ else
 fi
 
 # =============================================================================
-# Test 4: Generate Certificate
+# Test 4: Upload Bundle (v1)
 # =============================================================================
 
-header "Test 4: Generate Certificate"
-
-RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/utils/generate-certificate" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d "{\"appId\":\"${TEST_APP_ID}\"}")
-HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | sed '$d')
-
-if [ "$HTTP_CODE" = "200" ]; then
-  SUCCESS=$(echo "$BODY" | jq -r '.success')
-  if [ "$SUCCESS" = "true" ]; then
-    pass "POST /utils/generate-certificate - Keys generated"
-  else
-    fail "POST /utils/generate-certificate - success=false"
-  fi
-else
-  fail "POST /utils/generate-certificate - HTTP ${HTTP_CODE}"
-  echo "$BODY"
-fi
-
-# =============================================================================
-# Test 5: Upload Bundle (v1)
-# =============================================================================
-
-header "Test 5: Upload Bundle (v1.0.0)"
+header "Test 4: Upload Bundle (v1.0.0)"
 
 create_mock_bundle "1.0.0"
 
@@ -329,10 +304,10 @@ else
 fi
 
 # =============================================================================
-# Test 6: Release Upload
+# Test 5: Release Upload
 # =============================================================================
 
-header "Test 6: Release Upload"
+header "Test 5: Release Upload"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/utils/release" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -354,10 +329,10 @@ else
 fi
 
 # =============================================================================
-# Test 7: Fetch Manifest
+# Test 6: Fetch Manifest
 # =============================================================================
 
-header "Test 7: Fetch Manifest (Expo Client)"
+header "Test 6: Fetch Manifest (Expo Client)"
 
 # Test non-existent project
 RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
@@ -411,10 +386,10 @@ else
 fi
 
 # =============================================================================
-# Test 8: Case-Insensitive Lookups
+# Test 7: Case-Insensitive Lookups
 # =============================================================================
 
-header "Test 8: Case-Insensitive Lookups"
+header "Test 7: Case-Insensitive Lookups"
 
 # Test manifest with lowercase project ID
 LOWERCASE_APP_ID=$(echo "$TEST_APP_ID" | tr '[:upper:]' '[:lower:]')
@@ -484,10 +459,10 @@ else
 fi
 
 # =============================================================================
-# Test 9: Upload Second Bundle (v1.0.1)
+# Test 8: Upload Second Bundle (v1.0.1)
 # =============================================================================
 
-header "Test 9: Upload Second Bundle (v1.0.1)"
+header "Test 8: Upload Second Bundle (v1.0.1)"
 
 create_mock_bundle "1.0.1"
 
@@ -514,10 +489,10 @@ else
 fi
 
 # =============================================================================
-# Test 10: Release Second Upload
+# Test 9: Release Second Upload
 # =============================================================================
 
-header "Test 10: Release Second Upload"
+header "Test 9: Release Second Upload"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/utils/release" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -545,10 +520,10 @@ else
 fi
 
 # =============================================================================
-# Test 11: Rollback
+# Test 10: Rollback
 # =============================================================================
 
-header "Test 11: Rollback"
+header "Test 10: Rollback"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${BASE_URL}/utils/rollback" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -588,10 +563,10 @@ else
 fi
 
 # =============================================================================
-# Test 12: Verify Rollback in Manifest
+# Test 11: Verify Rollback in Manifest
 # =============================================================================
 
-header "Test 12: Verify Rollback in Manifest"
+header "Test 11: Verify Rollback in Manifest"
 
 RESPONSE=$(curl -s "${BASE_URL}/api/manifest" \
   -H "expo-project: ${TEST_APP_ID}" \
@@ -613,10 +588,10 @@ else
 fi
 
 # =============================================================================
-# Test 13: Platform-Specific Uploads
+# Test 12: Platform-Specific Uploads
 # =============================================================================
 
-header "Test 13: Platform-Specific Uploads"
+header "Test 12: Platform-Specific Uploads"
 
 # Create a new mock bundle for platform-specific test
 create_mock_bundle "2.0.0"
@@ -689,10 +664,10 @@ curl -s -X POST "${BASE_URL}/utils/release" \
 pass "Released both platform-specific uploads"
 
 # =============================================================================
-# Test 14: Platform Filtering in Manifest
+# Test 13: Platform Filtering in Manifest
 # =============================================================================
 
-header "Test 14: Platform Filtering in Manifest"
+header "Test 13: Platform Filtering in Manifest"
 
 # iOS should get iOS-only version
 RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/manifest" \
